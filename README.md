@@ -66,3 +66,28 @@ Python, Pandas, NumPy, Matplotlib, and Seaborn. The notebook was developed and r
 ### Next Steps
 
 In Week 2, I will test how well these customer characteristics predict churn and compare machine learning models. I will also examine how model evaluation changes when the two churn classes have unequal sizes.
+## Week 2
+
+### Building and Evaluating Machine Learning Models
+
+In Week 2, I built and evaluated several machine learning models to predict customer churn using the Telco Customer Churn dataset.
+
+The dataset contained 7,043 customers and 21 original columns. After preprocessing and one-hot encoding, the feature table contained 30 columns. The data was divided into 5,634 training records and 1,409 testing records. The churn rate was 26.54% in both sets.
+
+I first created a majority-class baseline. It achieved 73.46% accuracy but had 0% churn recall because it predicted that every customer would stay.
+
+The main models produced these results:
+
+| Model | Accuracy | Churn Precision | Churn Recall | F1 Score | ROC-AUC |
+|---|---:|---:|---:|---:|---:|
+| Baseline | 0.735 | 0.000 | 0.000 | 0.000 | 0.500 |
+| Logistic Regression | 0.807 | 0.658 | 0.567 | 0.609 | 0.842 |
+| Balanced Logistic Regression | 0.740 | 0.507 | 0.786 | 0.616 | 0.841 |
+| Decision Tree | 0.796 | 0.634 | 0.545 | 0.586 | 0.827 |
+| Random Forest | 0.806 | 0.672 | 0.527 | 0.591 | 0.843 |
+
+The random forest achieved the highest ROC-AUC at 0.843, while logistic regression was easier to interpret. The balanced logistic regression detected more churners, increasing recall from 0.567 to 0.786, but its precision decreased because it produced more false alarms.
+
+I also tested a business-based probability threshold. Since missing a churner costs PKR 6,000 and contacting a non-churner costs PKR 1,000, the calculated threshold was 0.1429. At this threshold, churn recall increased to 0.920 and the estimated cost decreased from PKR 1,082,000 to PKR 619,000 on the test data.
+
+The main lesson from Week 2 was that accuracy alone is not enough for churn prediction. Recall, precision, ROC-AUC, and business cost are also important when deciding which customers should receive retention offers.
