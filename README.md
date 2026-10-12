@@ -115,3 +115,57 @@ The main lesson from Week 3 was that a single split can be misleading, so model 
 I also tested a business-based probability threshold. Since missing a churner costs PKR 6,000 and contacting a non-churner costs PKR 1,000, the calculated threshold was 0.1429. At this threshold, churn recall increased to 0.920 and the estimated cost decreased from PKR 1,082,000 to PKR 619,000 on the test data.
 
 The main lesson from Week 2 was that accuracy alone is not enough for churn prediction. Recall, precision, ROC-AUC, and business cost are also important when deciding which customers should receive retention offers.
+## Week 3: Model Optimization and Unsupervised Learning
+
+In Week 3, I studied how much model performance can change because of random train-validation splits. Using 20 different random seeds, Logistic Regression accuracy ranged from 0.780 to 0.828, with a standard deviation of 0.0104.
+
+I then used five-fold stratified cross-validation to obtain more reliable estimates.
+
+| Model | Cross-validated AUC |
+|---|---:|
+| Logistic Regression | 0.846 +/- 0.013 |
+| Random Forest | 0.844 +/- 0.011 |
+| XGBoost | 0.8502 +/- 0.0117 |
+
+I compared validation curves, grid search, and random search. Grid search achieved a best AUC of 0.8468 in 72 seconds, while random search achieved 0.8464 in 76 seconds.
+
+The final model was selected using cross-validation. Tuned XGBoost was selected because it had the highest CV AUC. Its test AUC, evaluated once at the end, was 0.8483.
+
+K-means produced four customer segments. The riskiest segment was the New, high-cost customer group, which had a churn rate of 43%. This segment should receive early loyalty offers and onboarding support.
+
+PCA showed that 15 of the 30 components explain 90% of the variance. This indicates that some encoded features contain overlapping information.
+
+The main lesson from Week 3 was that a single split can be misleading, so model comparisons should use cross-validation and the test set should remain untouched until the final evaluation.
+## Week 4: From Notebook to Product
+
+I packaged the Week 3 XGBoost churn model into a Streamlit web application called Churn Risk Advisor.
+
+The application allows a user to:
+
+- Enter one customer's information
+- View the predicted churn probability
+- View a LOW, WATCH, or HIGH risk band
+- Change the contact threshold
+- Test what-if changes such as contract type
+- Upload a CSV file for batch scoring
+- Download the scored customer file
+
+### Model Card
+
+**Intended use:** Rank existing telecom customers by churn risk so a retention team can prioritize follow-up calls.
+
+**Not for:** Credit decisions, pricing decisions, or denying services.
+
+**Dataset:** IBM Telco Customer Churn, 7,043 customers, approximately 26.5% churn.
+
+**Model:** Tuned XGBoost, selected using five-fold cross-validation.
+
+**Performance:** CV AUC 0.8502 +/- 0.0117; test AUC 0.8483. The test set was used once.
+
+**Threshold:** 0.1429, based on the Week 2 cost analysis using a false-negative cost of PKR 6,000 and a false-positive cost of PKR 1,000.
+
+**Limitations:** The model was trained on one US telecom dataset from one period. It has not been validated on Pakistani telecom data. Its relationships are associations from the dataset and should not be interpreted as proof of cause.
+
+**Owner:** Muhammad Haissam  
+**Version:** 1.0  
+**Date:** October 2026  
