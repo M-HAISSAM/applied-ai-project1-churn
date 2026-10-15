@@ -1,7 +1,7 @@
-streamlit>=1.32
+streamlit>=1.40
 scikit-learn==1.6.1
 pandas
 numpy
 joblib
 xgboost
-altair>=5,<6
+plotly>=5.20
