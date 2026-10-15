@@ -1,7 +1,10 @@
-streamlit>=1.40
-scikit-learn==1.6.1
-pandas
-numpy
-joblib
-xgboost
-plotly>=5.20
+[theme]
+base = "light"
+primaryColor = "#2563eb"
+backgroundColor = "#f4f6fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
