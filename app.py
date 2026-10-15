@@ -7,51 +7,52 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import sklearn
 import streamlit as st
 import xgboost as xgb
 
-st.set_page_config(page_title="Churn Risk Advisor | Mission Control", page_icon="🛰️", layout="wide",
+st.set_page_config(page_title="Churn Risk Advisor | Mission Control", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
 
 CSS = """<style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
-:root{--bg:#05070d;--ink:#e6edf7;--mut:#8ea0bd;--line:rgba(120,160,220,.16);--cy:#4fd1ff;--red:#fc3d21;--amb:#ffb84d;--grn:#3ddc97;--blu:#0b3d91}
-html,body,.stApp{font-family:'Space Grotesk',system-ui,sans-serif}
-.stApp{color:var(--ink);background:radial-gradient(70rem 40rem at 85% -10%,rgba(11,61,145,.45),transparent 60%),radial-gradient(50rem 30rem at -5% 100%,rgba(79,209,255,.10),transparent 60%),
-linear-gradient(rgba(120,160,220,.045) 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,rgba(120,160,220,.045) 1px,transparent 1px) 0 0/44px 44px,#05070d;background-attachment:fixed}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+:root{--ink:#0f172a;--mut:#64748b;--line:rgba(15,23,42,.10);--acc:#2563eb;--red:#dc2626;--amb:#d97706;--grn:#059669}
+html,body,.stApp{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.stApp{color:var(--ink);background:radial-gradient(60rem 36rem at 92% -8%,rgba(37,99,235,.09),transparent 60%),radial-gradient(48rem 30rem at -6% 100%,rgba(5,150,105,.08),transparent 60%),linear-gradient(180deg,#fafbfd 0%,#eef2f7 100%);background-attachment:fixed}
 [data-testid="stHeader"]{background:transparent}[data-testid="stToolbar"],footer,#MainMenu{display:none!important}
-.block-container{max-width:1500px;padding:1rem 1.4rem 3rem}
-h1,h2,h3,h4{font-family:'Space Grotesk';letter-spacing:-.01em}
-[data-testid="stSidebar"]{background:rgba(8,14,28,.92);border-right:1px solid var(--line);backdrop-filter:blur(18px)}
-[data-testid="stSidebar"] h2{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;color:var(--cy)}
-label,[data-testid="stWidgetLabel"] p{color:var(--mut)!important;font-size:.8rem!important}
-div[data-baseweb="select"]>div,div[data-baseweb="input"]{background:rgba(255,255,255,.04)!important;border-color:var(--line)!important;border-radius:10px!important}
-[data-baseweb="popover"] ul{background:#0b1220!important}
-.top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.9rem 1.2rem;margin-bottom:1rem;border:1px solid var(--line);border-radius:16px;
-background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.02));backdrop-filter:blur(20px);box-shadow:0 10px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.1)}
-.brand{display:flex;align-items:center;gap:.9rem}
-.emb{width:2.7rem;height:2.7rem;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4fd1ff,#0b3d91 60%,#05070d);position:relative;box-shadow:0 0 22px rgba(79,209,255,.5)}
-.emb::before{content:"";position:absolute;inset:-5px -10px;border:1.5px solid var(--red);border-radius:50%;transform:rotate(-24deg)}
-.brand b{font-size:1.2rem;font-weight:700}.brand small{display:block;color:var(--mut);font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.12em;text-transform:uppercase}
-.chips{display:flex;gap:.5rem;flex-wrap:wrap}
-.chip{font-family:'JetBrains Mono';font-size:.7rem;padding:.35rem .65rem;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--mut)}
-.chip b{color:var(--ink);font-weight:600}.chip.ok b{color:var(--grn)}
-.kpi{border:1px solid var(--line);border-radius:14px;padding:.85rem 1rem;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.02));backdrop-filter:blur(16px);
-box-shadow:inset 0 1px 0 rgba(255,255,255,.09);border-top:2px solid var(--c,var(--cy));margin-bottom:.6rem}
-.kpi span{display:block;font-family:'JetBrains Mono';font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
-.kpi b{display:block;font-family:'JetBrains Mono';font-size:1.7rem;font-weight:700;margin:.15rem 0;color:var(--c,var(--ink))}
-.kpi em{font-style:normal;font-size:.76rem;color:var(--mut)}
-[data-testid="stVerticalBlockBorderWrapper"]{border:1px solid var(--line)!important;border-radius:16px!important;background:rgba(255,255,255,.03);backdrop-filter:blur(14px);padding:.3rem .4rem}
-.ph{font-family:'JetBrains Mono';font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cy);margin:.2rem 0 .1rem}
-.note{color:var(--mut);font-size:.8rem;line-height:1.5}
-.stTabs [data-baseweb="tab-list"]{gap:.25rem;overflow-x:auto;border-bottom:1px solid var(--line)}
-.stTabs [data-baseweb="tab"]{font-family:'JetBrains Mono';font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding:.6rem .9rem}
-.stTabs [aria-selected="true"]{color:var(--cy)}
-.stButton>button,.stDownloadButton>button{border-radius:10px;font-weight:600;border:1px solid var(--line)}
-.stDownloadButton>button[kind="primary"]{background:linear-gradient(120deg,#0b3d91,#1f7ae0);border:none;color:#fff}
-@media(max-width:820px){.block-container{padding:.6rem .7rem 2rem}.top{padding:.7rem}}
+.block-container{max-width:1560px;padding:1rem 1.6rem 3rem}
+h1,h2,h3,h4{font-family:'Inter';letter-spacing:-.02em;color:var(--ink)}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#ffffff,#f1f5f9);border-right:1px solid var(--line);box-shadow:6px 0 30px -18px rgba(15,23,42,.25)}
+[data-testid="stSidebar"] h2{font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:700}
+label,[data-testid="stWidgetLabel"] p{color:#475569!important;font-size:.85rem!important;font-weight:500}
+div[data-baseweb="select"]>div,div[data-baseweb="input"]{border-radius:10px!important;border-color:rgba(15,23,42,.14)!important;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.top,.kpi{position:relative;overflow:hidden;background:linear-gradient(180deg,#ffffff 0%,#f6f8fb 100%);border:1px solid rgba(15,23,42,.08);border-radius:16px;
+box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(15,23,42,.06),0 16px 34px -16px rgba(15,23,42,.22)}
+.top::before,.kpi::before{content:"";position:absolute;inset:0 0 52% 0;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,0));pointer-events:none}
+.top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:1rem 1.3rem;margin-bottom:1.1rem}
+.brand{display:flex;align-items:center;gap:.95rem;position:relative}
+.emb{width:2.8rem;height:2.8rem;border-radius:50%;background:radial-gradient(circle at 32% 28%,#93c5fd,#2563eb 55%,#1e3a8a);position:relative;box-shadow:0 6px 16px rgba(37,99,235,.4),inset 0 2px 3px rgba(255,255,255,.6)}
+.emb::before{content:"";position:absolute;inset:-5px -11px;border:2px solid var(--red);border-radius:50%;transform:rotate(-24deg)}
+.brand b{font-size:1.3rem;font-weight:800}.brand small{display:block;color:var(--mut);font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.14em;text-transform:uppercase}
+.chips{display:flex;gap:.5rem;flex-wrap:wrap;position:relative}
+.chip{font-family:'JetBrains Mono';font-size:.72rem;padding:.4rem .7rem;border-radius:9px;border:1px solid var(--line);background:linear-gradient(180deg,#fff,#f1f5f9);color:var(--mut);box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.chip b{color:var(--ink);font-weight:700}.chip.ok b{color:var(--grn)}
+.kpi{padding:.95rem 1.1rem;border-top:3px solid var(--c,var(--acc));margin-bottom:.7rem}
+.kpi span{position:relative;display:block;font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+.kpi b{position:relative;display:block;font-family:'JetBrains Mono';font-size:1.85rem;font-weight:700;margin:.2rem 0;color:var(--c,var(--ink))}
+.kpi em{position:relative;font-style:normal;font-size:.8rem;color:var(--mut)}
+[data-testid="stVerticalBlockBorderWrapper"]{border:1px solid rgba(15,23,42,.08)!important;border-radius:16px!important;background:linear-gradient(180deg,#fff,#fbfcfe);box-shadow:inset 0 1px 0 #fff,0 14px 30px -18px rgba(15,23,42,.25);padding:.4rem .5rem}
+.ph{font-family:'JetBrains Mono';font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);font-weight:700;margin:.25rem 0 .15rem}
+.note{color:var(--mut);font-size:.84rem;line-height:1.55}
+.stTabs [data-baseweb="tab-list"]{gap:.2rem;overflow-x:auto;border-bottom:1px solid var(--line)}
+.stTabs [data-baseweb="tab"]{font-size:.84rem;font-weight:600;color:var(--mut);padding:.65rem 1rem}
+.stTabs [aria-selected="true"]{color:var(--acc)}
+.stButton>button,.stDownloadButton>button{border-radius:10px;font-weight:600;border:1px solid rgba(15,23,42,.14);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.stDownloadButton>button[kind="primary"]{background:linear-gradient(180deg,#3b82f6,#1d4ed8);border:none;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 18px -8px rgba(29,78,216,.7)}
+.rep{font-family:'JetBrains Mono';font-size:.82rem;line-height:1.7;white-space:pre-wrap;color:#1e293b}
+@media(max-width:820px){.block-container{padding:.6rem .7rem 2rem}.top{padding:.8rem}.kpi b{font-size:1.5rem}}
 </style>"""
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -117,24 +118,25 @@ def mfmt(key: str, f: str = '{:.3f}') -> str:
 
 
 # ------------------------------------------------------------------ chart helpers
-SCALE = [[0, '#0b2a4a'], [.3, '#1f7ae0'], [.55, '#4fd1ff'], [.75, '#ffb84d'], [1, '#fc3d21']]
+SCALE = [[0, '#d1fae5'], [.3, '#fde68a'], [.6, '#fdba74'], [1, '#dc2626']]
 
 
 def sty(fig: go.Figure, h: int = 330, **kw) -> go.Figure:
     fig.update_layout(height=h, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                      font=dict(family='Space Grotesk', color='#c3d0e6', size=12),
-                      margin=dict(l=8, r=8, t=34, b=8), title_font=dict(size=13, color='#4fd1ff'),
+                      font=dict(family='Inter', color='#1e293b', size=13),
+                      margin=dict(l=8, r=8, t=34, b=8), title_font=dict(size=14, color='#0f172a'),
                       legend=dict(orientation='h', y=-0.18), **kw)
-    fig.update_xaxes(gridcolor='rgba(120,160,220,.10)', zeroline=False)
-    fig.update_yaxes(gridcolor='rgba(120,160,220,.10)', zeroline=False)
+    fig.update_xaxes(gridcolor='rgba(15,23,42,.08)', zeroline=False)
+    fig.update_yaxes(gridcolor='rgba(15,23,42,.08)', zeroline=False)
     return fig
 
 
 def show(fig: go.Figure) -> None:
-    st.plotly_chart(fig, config={'displayModeBar': False})
+    st.plotly_chart(fig, config={'displaylogo': False, 'displayModeBar': 'hover', 'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                                 'toImageButtonOptions': {'format': 'png', 'scale': 3}})
 
 
-def kpi(label: str, value: str, sub: str = '', color: str = '#4fd1ff') -> None:
+def kpi(label: str, value: str, sub: str = '', color: str = '#2563eb') -> None:
     st.markdown(f"<div class='kpi' style='--c:{color}'><span>{label}</span><b>{value}</b><em>{sub}</em></div>", unsafe_allow_html=True)
 
 
@@ -143,7 +145,7 @@ def panel(title: str) -> None:
 
 
 def band_of(p: float, thr: float) -> tuple[str, str]:
-    return ('HIGH', '#fc3d21') if p >= thr else ('WATCH', '#ffb84d') if p >= thr / 2 else ('LOW', '#3ddc97')
+    return ('HIGH', '#dc2626') if p >= thr else ('WATCH', '#d97706') if p >= thr / 2 else ('LOW', '#059669')
 
 
 # ------------------------------------------------------------------ sidebar: one customer (lab Task 2.2)
@@ -191,7 +193,8 @@ st.markdown(
     f"<div class='chip {'ok' if ver_ok else ''}'>SKLEARN <b>{sklearn.__version__}</b></div><div class='chip'>{now}</div></div></div>",
     unsafe_allow_html=True)
 
-tabs = st.tabs(["Overview", "What-if lab", "Risk maps", "Explainability", "Fleet scoring", "Model & checks"])
+TAB = dict(zip(["ov", "wi", "rm", "ex", "sg", "rp", "fl", "rs", "md", "gd"], st.tabs(
+    ["Overview", "What-if lab", "Risk maps", "Explainability", "Segments", "Retention planner", "Fleet scoring", "Customer report", "Model & checks", "Guide"])))
 
 
 # ------------------------------------------------------------------ cached model-driven grids
@@ -225,24 +228,25 @@ def curves(rj: str):
 rj = json.dumps(row)
 sample = load_sample()
 sample_p = score(sample[RAW_COLS]) if sample is not None and all(c in sample.columns for c in RAW_COLS) else None
+sdf = sample.assign(p_churn=sample_p) if sample_p is not None else None
 
 # ================================================================== OVERVIEW
-with tabs[0]:
+with TAB['ov']:
     action = 'Contact now' if band == 'HIGH' else 'Monitor closely' if band == 'WATCH' else 'No action'
     c1, c2, c3, c4 = st.columns(4)
     with c1: kpi('Churn probability', f'{p:.0%}', 'model estimate', bcol)
     with c2: kpi('Risk band', band, f'HIGH at {threshold:.0%}, WATCH at {threshold/2:.0%}', bcol)
     with c3: kpi('Recommended action', action, 'decision support only', bcol)
-    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', '#ffb84d')
+    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', '#d97706')
     left, right = st.columns([1, 1.25])
     with left, st.container(border=True):
         panel('Risk gauge')
         g = go.Figure(go.Indicator(mode='gauge+number', value=p * 100,
-                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color='#fff')),
-                                   gauge=dict(axis=dict(range=[0, 100], tickcolor='#6b7c99'), bar=dict(color='#ffffff', thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
-                                              steps=[dict(range=[0, threshold * 50], color='rgba(61,220,151,.55)'), dict(range=[threshold * 50, threshold * 100], color='rgba(255,184,77,.6)'),
-                                                     dict(range=[threshold * 100, 100], color='rgba(252,61,33,.65)')],
-                                              threshold=dict(line=dict(color='#fff', width=3), thickness=.9, value=threshold * 100))))
+                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color='#0f172a')),
+                                   gauge=dict(axis=dict(range=[0, 100], tickcolor='#64748b'), bar=dict(color='#0f172a', thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
+                                              steps=[dict(range=[0, threshold * 50], color='rgba(5,150,105,.35)'), dict(range=[threshold * 50, threshold * 100], color='rgba(217,119,6,.35)'),
+                                                     dict(range=[threshold * 100, 100], color='rgba(220,38,38,.38)')],
+                                              threshold=dict(line=dict(color='#0f172a', width=3), thickness=.9, value=threshold * 100))))
         show(sty(g, 300))
         if sample_p is not None:
             pct = float((sample_p < p).mean())
@@ -251,15 +255,15 @@ with tabs[0]:
         panel('Churn curve by contract, this customer profile')
         T, cv = curves(rj)
         fig = go.Figure()
-        for (c, y), col in zip(cv.items(), ['#fc3d21', '#ffb84d', '#3ddc97']):
+        for (c, y), col in zip(cv.items(), ['#dc2626', '#d97706', '#059669']):
             fig.add_trace(go.Scatter(x=T, y=y * 100, name=c, mode='lines', line=dict(color=col, width=3)))
-        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=14, color='#fff', line=dict(color=bcol, width=3))))
-        fig.add_hline(y=threshold * 100, line=dict(color='#4fd1ff', dash='dot'), annotation_text='threshold')
+        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=15, color='#0f172a', line=dict(color=bcol, width=3))))
+        fig.add_hline(y=threshold * 100, line=dict(color='#2563eb', dash='dot'), annotation_text='threshold')
         show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Churn probability (%)'))
     st.markdown("<div class='note'>Charts are model estimates from patterns in one dataset. They describe association, not guaranteed effects.</div>", unsafe_allow_html=True)
 
 # ================================================================== WHAT-IF
-with tabs[1]:
+with TAB['wi']:
     changes = [('Contract', c) for c in ['One year', 'Two year'] if c != contract]
     changes += [('PaymentMethod', m) for m in ['Bank transfer (automatic)', 'Credit card (automatic)'] if payment in ('Electronic check', 'Mailed check') and m != payment]
     if internet != 'No':
@@ -278,7 +282,7 @@ with tabs[1]:
         if wi.empty:
             st.info('No what-if options apply to this profile.')
         else:
-            colors = ['#3ddc97' if d < 0 else '#fc3d21' for d in wi['Difference']]
+            colors = ['#059669' if d < 0 else '#dc2626' for d in wi['Difference']]
             fig = go.Figure(go.Bar(x=wi['Difference'] * 100, y=wi['Change'], orientation='h', marker_color=colors,
                                    text=[f'{d*100:+.1f} pts' for d in wi['Difference']], textposition='outside'))
             fig.update_yaxes(autorange='reversed')
@@ -291,14 +295,14 @@ with tabs[1]:
     st.caption('Associations learned from data, not guaranteed effects. A lower score does not prove that making the change would keep the customer. Only a controlled retention test can show that.')
 
 # ================================================================== RISK MAPS
-with tabs[2]:
+with TAB['rm']:
     with st.container(border=True):
         panel('Risk surface: tenure x monthly charges (all other fields as in the sidebar)')
         ctr = st.radio('Contract for the map', CONTRACTS, index=CONTRACTS.index(contract), horizontal=True)
         T, M, Z = grid_tm(rj, ctr)
         fig = go.Figure(go.Heatmap(x=T, y=M, z=Z * 100, colorscale=SCALE, zmin=0, zmax=100, colorbar=dict(title='%'),
                                    hovertemplate='tenure %{x} mo<br>$%{y}/mo<br>risk %{z:.0f}%<extra></extra>'))
-        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color='#fff', symbol='x', line=dict(width=2))))
+        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color='#0f172a', symbol='x', line=dict(width=2))))
         show(sty(fig, 420, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'))
     h1, h2 = st.columns(2)
     with h1, st.container(border=True):
@@ -313,13 +317,13 @@ with tabs[2]:
         show(sty(fig, 320))
 
 # ================================================================== EXPLAINABILITY
-with tabs[3]:
+with TAB['ex']:
     e1, e2 = st.columns(2)
     with e1, st.container(border=True):
         panel('Why this score: top drivers for this customer')
         cs = contributions(customer)
         top = cs.reindex(cs.abs().sort_values(ascending=False).index).head(10)
-        fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=['#fc3d21' if v > 0 else '#3ddc97' for v in top.values]))
+        fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=['#dc2626' if v > 0 else '#059669' for v in top.values]))
         fig.update_yaxes(autorange='reversed')
         show(sty(fig, 400, xaxis_title='Contribution to log-odds of churn'))
         st.caption('Red pushes toward churn, green pushes away. Values come from XGBoost tree contributions.')
@@ -331,7 +335,7 @@ with tabs[3]:
         st.caption('Importance shows what the model uses, not what causes churn.')
 
 # ================================================================== FLEET SCORING
-with tabs[4]:
+with TAB['fl']:
     src = st.radio('Data source', ['Bundled sample file', 'Upload a CSV'], horizontal=True)
     data = None
     if src == 'Upload a CSV':
@@ -363,25 +367,25 @@ with tabs[4]:
             n_hi = int((d['contact'] == 'Yes').sum())
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi('Customers scored', f'{len(d):,}', 'rows in file')
-            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', '#fc3d21')
-            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', '#ffb84d')
-            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', 'sum of p x PKR 6,000', '#ffb84d')
+            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', '#dc2626')
+            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', '#d97706')
+            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', 'sum of p x PKR 6,000', '#d97706')
             r1, r2 = st.columns([1.4, 1])
             with r1, st.container(border=True):
                 panel('Distribution of churn probability')
-                fig = go.Figure(go.Histogram(x=d.p_churn * 100, nbinsx=20, marker=dict(color='#4fd1ff', line=dict(color='#05070d', width=1))))
-                fig.add_vline(x=threshold * 100, line=dict(color='#fc3d21', dash='dash'), annotation_text='threshold')
+                fig = go.Figure(go.Histogram(x=d.p_churn * 100, nbinsx=20, marker=dict(color='#2563eb', line=dict(color='#ffffff', width=1))))
+                fig.add_vline(x=threshold * 100, line=dict(color='#dc2626', dash='dash'), annotation_text='threshold')
                 show(sty(fig, 320, xaxis_title='Churn probability (%)', yaxis_title='Customers'))
             with r2, st.container(border=True):
                 panel('Customers by band')
                 cnt = d['band'].value_counts().reindex(['HIGH', 'WATCH', 'LOW']).fillna(0)
-                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=['#fc3d21', '#ffb84d', '#3ddc97']), sort=False))
+                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=['#dc2626', '#d97706', '#059669']), sort=False))
                 show(sty(fig, 320))
             r3, r4 = st.columns(2)
             with r3, st.container(border=True):
                 panel('Tenure vs monthly charges, colored by risk')
                 fig = go.Figure(go.Scatter(x=d.tenure, y=d.MonthlyCharges, mode='markers', text=d.get('customerID'),
-                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=.5, color='#05070d'))))
+                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=1, color='#ffffff'))))
                 show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'))
             with r4, st.container(border=True):
                 panel('Average risk: contract x internet service')
@@ -398,12 +402,12 @@ with tabs[4]:
             st.download_button('Download scored CSV', d.drop(columns=['band']).to_csv(index=False), 'scored_customers.csv', 'text/csv', type='primary')
 
 # ================================================================== MODEL & CHECKS
-with tabs[5]:
+with TAB['md']:
     m1, m2, m3, m4 = st.columns(4)
     with m1: kpi('CV AUC', mfmt('cv_auc'), f"± {mfmt('cv_auc_std')}")
     with m2: kpi('Test AUC', mfmt('test_auc'), 'test set used once')
-    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', '#ffb84d')
-    with m4: kpi('Features', str(len(COLS)), 'encoded columns', '#3ddc97')
+    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', '#d97706')
+    with m4: kpi('Features', str(len(COLS)), 'encoded columns', '#059669')
     k1, k2 = st.columns(2)
     with k1, st.container(border=True):
         panel('System checks')
@@ -423,4 +427,107 @@ with tabs[5]:
                     f"**Limitations:** one US dataset from one period, no Pakistan data, associations not causes, performance may drift as plans change.")
     with st.expander('Feature columns'):
         st.write(COLS)
+
+# ================================================================== SEGMENTS
+with TAB['sg']:
+    if sdf is None:
+        st.info('sample_customers.csv is needed for segment analysis.')
+    else:
+        g = sdf.assign(Tenure_band=pd.cut(sdf.tenure, [-1, 12, 24, 48, 72], labels=['0-12 mo', '13-24 mo', '25-48 mo', '49-72 mo']).astype(str),
+                       Senior=sdf.SeniorCitizen.map({0: 'No', 1: 'Yes'}))
+        seg = g.groupby(['Contract', 'InternetService']).p_churn.agg(['mean', 'count']).reset_index()
+        seg = seg[seg['count'] >= 3].sort_values('mean', ascending=False)
+        if not seg.empty:
+            t = seg.iloc[0]
+            st.markdown(f"<div class='kpi' style='--c:#dc2626'><span>Riskiest named segment (n of at least 3)</span><b style='font-size:1.4rem'>{t.Contract} + {t.InternetService}</b>"
+                        f"<em>Average risk {t['mean']:.0%} across {int(t['count'])} customers. Suggested test: offer a one-year contract incentive or an autopay switch to a small group and compare with an untouched group.</em></div>", unsafe_allow_html=True)
+        dims = ['Contract', 'InternetService', 'PaymentMethod', 'Tenure_band', 'Senior', 'PaperlessBilling']
+        for chunk in (dims[:3], dims[3:]):
+            for col, dim in zip(st.columns(3), chunk):
+                with col, st.container(border=True):
+                    panel(f'Average risk by {dim}')
+                    a = g.groupby(dim).p_churn.agg(['mean', 'count']).reset_index().sort_values('mean')
+                    fig = go.Figure(go.Bar(x=a['mean'] * 100, y=a[dim].astype(str), orientation='h', marker=dict(color=a['mean'] * 100, colorscale=SCALE, cmin=0, cmax=100),
+                                           text=[f"{m*100:.0f}%  (n={c})" for m, c in zip(a['mean'], a['count'])], textposition='outside', cliponaxis=False))
+                    fig.update_xaxes(range=[0, 115])
+                    show(sty(fig, 270))
+        with st.container(border=True):
+            panel('Portfolio map: size is customers, colour is average risk')
+            tm = px.treemap(g, path=[px.Constant('All customers'), 'Contract', 'InternetService'], color='p_churn', color_continuous_scale=SCALE, range_color=(0, 1))
+            tm.update_traces(textinfo='label+value', textfont=dict(size=15))
+            show(sty(tm, 380))
+        st.caption(f'Based on the {len(g)} customers in the sample file. Small groups are noisy: treat these as leads to test, not conclusions.')
+
+# ================================================================== RETENTION PLANNER
+with TAB['rp']:
+    if sample_p is None:
+        st.info('sample_customers.csv is needed for the planner.')
+    else:
+        a, b, c = st.columns(3)
+        succ = a.slider('Offer success rate (assumption)', 0.05, 0.80, 0.30, 0.05)
+        ocost = b.number_input('Cost of one retention offer (PKR)', 0, 20000, FP_COST, 100)
+        val = c.number_input('Value of a retained customer (PKR)', 0, 100000, FN_COST, 500)
+        ths = np.round(np.arange(0.05, 0.96, 0.05), 2)
+        out = []
+        for t in ths:
+            m = sample_p >= t
+            out.append(dict(t=t, cost=float(((1 - sample_p[m]) * ocost).sum() + (sample_p[~m] * val).sum()),
+                            net=float((sample_p[m] * succ * val).sum() - m.sum() * ocost), n=int(m.sum())))
+        o = pd.DataFrame(out)
+        cur = o.iloc[(o.t - threshold).abs().argmin()]
+        best = o.loc[o.net.idxmax()]
+        k1, k2, k3, k4 = st.columns(4)
+        with k1: kpi('Customers contacted', f'{int(cur.n)}', f'of {len(sample_p)} at threshold {threshold:.2f}')
+        with k2: kpi('Offer spend', f'PKR {cur.n*ocost:,.0f}', 'cost of all offers', '#d97706')
+        with k3: kpi('Expected net value', f'PKR {cur.net:,.0f}', 'saved value minus spend', '#059669' if cur.net >= 0 else '#dc2626')
+        with k4: kpi('Best threshold', f'{best.t:.2f}', f'net PKR {best.net:,.0f}', '#2563eb')
+        p1, p2 = st.columns(2)
+        with p1, st.container(border=True):
+            panel('Expected net value by threshold')
+            fig = go.Figure(go.Scatter(x=o.t, y=o.net, mode='lines+markers', line=dict(color='#2563eb', width=3), fill='tozeroy', fillcolor='rgba(37,99,235,.10)'))
+            fig.add_vline(x=threshold, line=dict(color='#0f172a', dash='dot'), annotation_text='your threshold')
+            show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'))
+        with p2, st.container(border=True):
+            panel('Expected misclassification cost by threshold')
+            fig = go.Figure(go.Scatter(x=o.t, y=o.cost, mode='lines+markers', line=dict(color='#d97706', width=3)))
+            mn = o.loc[o.cost.idxmin()]
+            fig.add_trace(go.Scatter(x=[mn.t], y=[mn.cost], mode='markers', name='Minimum', marker=dict(size=14, color='#059669')))
+            fig.add_vline(x=threshold, line=dict(color='#0f172a', dash='dot'))
+            show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'))
+        st.caption('Planning estimate on the 50-customer sample, using model probabilities and the assumptions above. The success rate is a guess until a retention test measures it.')
+
+# ================================================================== CUSTOMER REPORT
+with TAB['rs']:
+    cs2 = contributions(customer)
+    top5 = cs2.reindex(cs2.abs().sort_values(ascending=False).index).head(5)
+    bw = wi.iloc[0] if (not wi.empty and wi.iloc[0]['Difference'] < 0) else None
+    lines = [f"CHURN RISK REPORT   {now}", "", f"Churn probability : {p:.1%}", f"Risk band         : {band} (threshold {threshold:.0%})",
+             f"Recommended action: {action}", f"Expected loss     : PKR {p*FN_COST:,.0f}", "", "Main drivers (log-odds):"]
+    lines += [f"  {'+' if v > 0 else '-'} {k}  ({v:+.2f})" for k, v in top5.items()]
+    lines += ["", f"Best what-if      : {bw['Change']} -> {bw['New probability']:.0%} ({bw['Difference']*100:+.1f} pts)" if bw is not None else "Best what-if      : none lowers risk",
+              "", "Profile: " + ', '.join(f'{k}={v}' for k, v in row.items()), "",
+              "Decision support only. Associations, not causes. Review with the retention team."]
+    r1, r2 = st.columns([1.2, 1])
+    with r1, st.container(border=True):
+        panel('Report')
+        st.markdown(f"<div class='rep'>{chr(10).join(lines)}</div>", unsafe_allow_html=True)
+        st.download_button('Download report (.txt)', '\n'.join(lines), 'customer_risk_report.txt', 'text/plain', type='primary')
+    with r2, st.container(border=True):
+        panel('Customer profile')
+        st.dataframe(customer.T.rename(columns={0: 'Value'}).astype(str), height=520)
+
+# ================================================================== GUIDE
+with TAB['gd']:
+    g1, g2 = st.columns(2)
+    with g1, st.container(border=True):
+        panel('How to use this dashboard')
+        st.markdown(f"1. Describe a customer in the **sidebar**. Everything updates at once.\n2. Read the **Overview** for probability, band and action.\n3. Use **What-if lab** to test plan changes on the same customer.\n"
+                    f"4. Check **Explainability** to see what drives the score.\n5. Use **Fleet scoring** for many customers, then **Segments** and **Retention planner** to decide where to act.\n6. Save a one-page summary from **Customer report**.")
+        st.markdown(f"**Bands:** HIGH at or above {threshold:.0%}, WATCH from {threshold/2:.0%} to {threshold:.0%}, LOW below that. The threshold changes the band, never the probability.")
+    with g2, st.container(border=True):
+        panel('Glossary and limits')
+        st.markdown("**Churn probability:** the model's estimate that this customer leaves.\n\n**Threshold:** the probability above which the team contacts a customer, set from the cost of missed churners versus wasted offers.\n\n"
+                    "**Expected loss:** probability times the value of a lost customer.\n\n**What-if:** the model re-scored with one field changed. It shows association, not a proven effect.\n\n"
+                    "**Limits:** trained on one US telecom dataset. Not for credit, pricing, or any decision that denies a service.")
+
 st.markdown("<div class='note' style='text-align:center;margin-top:1.5rem'>Churn Risk Advisor · Applied AI Project 1 · Decision support only. Review with the retention team before contacting a customer.</div>", unsafe_allow_html=True)
