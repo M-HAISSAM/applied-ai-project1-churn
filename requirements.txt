@@ -1,7 +1,7 @@
-streamlit>=1.40
-scikit-learn==1.6.1
+streamlit>=1.32
+scikit-learn==1.6.1      # must equal the version printed in Kaggle (Task 1.1)
+xgboost>=2.0,<4         # tighten to the exact xgboost.__version__ from your Kaggle notebook
+plotly>=5.20
 pandas
 numpy
 joblib
-xgboost
-plotly>=5.20
