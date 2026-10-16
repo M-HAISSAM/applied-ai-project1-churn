@@ -12,6 +12,9 @@ import plotly.graph_objects as go
 import sklearn
 import streamlit as st
 
+import dataset_lab
+from theme import SCALE, inject, kpi, panel, show, sty, topbar
+
 try:
     import xgboost as xgb
 except ImportError:  # only needed when the saved model is XGBoost
@@ -20,48 +23,19 @@ except ImportError:  # only needed when the saved model is XGBoost
 st.set_page_config(page_title="Churn Risk Advisor | Mission Control", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
 
-CSS = """<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
-:root{--ink:#0f172a;--mut:#64748b;--line:rgba(15,23,42,.10);--acc:#2563eb;--red:#dc2626;--amb:#d97706;--grn:#059669}
-html,body,.stApp{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-.stApp{color:var(--ink);background:radial-gradient(60rem 36rem at 92% -8%,rgba(37,99,235,.09),transparent 60%),radial-gradient(48rem 30rem at -6% 100%,rgba(5,150,105,.08),transparent 60%),linear-gradient(180deg,#fafbfd 0%,#eef2f7 100%);background-attachment:fixed}
-[data-testid="stHeader"]{background:transparent}[data-testid="stToolbar"],footer,#MainMenu{display:none!important}
-.block-container{max-width:1560px;padding:1rem 1.6rem 3rem}
-h1,h2,h3,h4{font-family:'Inter';letter-spacing:-.02em;color:var(--ink)}
-[data-testid="stSidebar"]{background:linear-gradient(180deg,#ffffff,#f1f5f9);border-right:1px solid var(--line);box-shadow:6px 0 30px -18px rgba(15,23,42,.25)}
-[data-testid="stSidebar"] h2{font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:700}
-label,[data-testid="stWidgetLabel"] p{color:#475569!important;font-size:.85rem!important;font-weight:500}
-div[data-baseweb="select"]>div,div[data-baseweb="input"]{border-radius:10px!important;border-color:rgba(15,23,42,.14)!important;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-.top,.kpi{position:relative;overflow:hidden;background:linear-gradient(180deg,#ffffff 0%,#f6f8fb 100%);border:1px solid rgba(15,23,42,.08);border-radius:16px;
-box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(15,23,42,.06),0 16px 34px -16px rgba(15,23,42,.22)}
-.top::before,.kpi::before{content:"";position:absolute;inset:0 0 52% 0;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,0));pointer-events:none}
-.top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:1rem 1.3rem;margin-bottom:1.1rem}
-.brand{display:flex;align-items:center;gap:.95rem;position:relative}
-.emb{width:2.8rem;height:2.8rem;border-radius:50%;background:radial-gradient(circle at 32% 28%,#93c5fd,#2563eb 55%,#1e3a8a);position:relative;box-shadow:0 6px 16px rgba(37,99,235,.4),inset 0 2px 3px rgba(255,255,255,.6)}
-.emb::before{content:"";position:absolute;inset:-5px -11px;border:2px solid var(--red);border-radius:50%;transform:rotate(-24deg)}
-.brand b{font-size:1.3rem;font-weight:800}.brand small{display:block;color:var(--mut);font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.14em;text-transform:uppercase}
-.chips{display:flex;gap:.5rem;flex-wrap:wrap;position:relative}
-.chip{font-family:'JetBrains Mono';font-size:.72rem;padding:.4rem .7rem;border-radius:9px;border:1px solid var(--line);background:linear-gradient(180deg,#fff,#f1f5f9);color:var(--mut);box-shadow:0 1px 2px rgba(15,23,42,.05)}
-.chip b{color:var(--ink);font-weight:700}.chip.ok b{color:var(--grn)}.chip.bad b{color:var(--amb)}
-.kpi{padding:.95rem 1.1rem;border-top:3px solid var(--c,var(--acc));margin-bottom:.7rem}
-.kpi span{position:relative;display:block;font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
-.kpi b{position:relative;display:block;font-family:'JetBrains Mono';font-size:1.85rem;font-weight:700;margin:.2rem 0;color:var(--c,var(--ink))}
-.kpi em{position:relative;font-style:normal;font-size:.8rem;color:var(--mut)}
-[data-testid="stVerticalBlockBorderWrapper"]{border:1px solid rgba(15,23,42,.08)!important;border-radius:16px!important;background:linear-gradient(180deg,#fff,#fbfcfe);box-shadow:inset 0 1px 0 #fff,0 14px 30px -18px rgba(15,23,42,.25);padding:.4rem .5rem}
-.ph{font-family:'JetBrains Mono';font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);font-weight:700;margin:.25rem 0 .15rem}
-.note{color:var(--mut);font-size:.84rem;line-height:1.55}
-.stTabs [data-baseweb="tab-list"]{gap:.2rem;overflow-x:auto;border-bottom:1px solid var(--line)}
-.stTabs [data-baseweb="tab"]{font-size:.84rem;font-weight:600;color:var(--mut);padding:.65rem 1rem}
-.stTabs [aria-selected="true"]{color:var(--acc)}
-.stButton>button,.stDownloadButton>button{border-radius:10px;font-weight:600;border:1px solid rgba(15,23,42,.14);box-shadow:0 1px 2px rgba(15,23,42,.08)}
-.stDownloadButton>button[kind="primary"]{background:linear-gradient(180deg,#3b82f6,#1d4ed8);border:none;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 18px -8px rgba(29,78,216,.7)}
-.rep{font-family:'JetBrains Mono';font-size:.82rem;line-height:1.7;white-space:pre-wrap;color:#1e293b}
-@media(max-width:820px){.block-container{padding:.6rem .7rem 2rem}.top{padding:.8rem}.kpi b{font-size:1.5rem}}
-</style>"""
-st.markdown(CSS, unsafe_allow_html=True)
+inject()
+
+# ------------------------------------------------------------------ workspace switch: the churn advisor or the any-dataset lab
+ROOT = Path(__file__).resolve().parent
+with st.sidebar:
+    st.markdown("## Workspace")
+    mode = st.radio('Workspace', ['📊 Churn Risk Advisor', '🧪 Dataset Lab (any data)'], key='mode', label_visibility='collapsed')
+    st.divider()
+if mode.startswith('🧪'):
+    dataset_lab.render(str(ROOT))
+    st.stop()
 
 # ------------------------------------------------------------------ constants
-ROOT = Path(__file__).resolve().parent
 RAW_COLS = ['gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure', 'PhoneService', 'MultipleLines',
             'InternetService', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
             'StreamingMovies', 'Contract', 'PaperlessBilling', 'PaymentMethod', 'MonthlyCharges', 'TotalCharges']
@@ -205,36 +179,9 @@ def mfmt(key: str, f: str = '{:.3f}') -> str:
     return f.format(v) if isinstance(v, (int, float)) else '—'
 
 
-# ------------------------------------------------------------------ chart helpers
-SCALE = [[0, '#d1fae5'], [.3, '#fde68a'], [.6, '#fdba74'], [1, '#dc2626']]
-
-
-def sty(fig: go.Figure, h: int = 330, **kw) -> go.Figure:
-    fig.update_layout(height=h, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                      font=dict(family='Inter', color='#1e293b', size=13),
-                      margin=dict(l=8, r=8, t=34, b=8), title_font=dict(size=14, color='#0f172a'),
-                      legend=dict(orientation='h', y=-0.18), **kw)
-    fig.update_xaxes(gridcolor='rgba(15,23,42,.08)', zeroline=False)
-    fig.update_yaxes(gridcolor='rgba(15,23,42,.08)', zeroline=False)
-    return fig
-
-
-def show(fig: go.Figure, key: str) -> None:
-    st.plotly_chart(fig, key=key, config={'displaylogo': False, 'displayModeBar': 'hover',
-                                          'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-                                          'toImageButtonOptions': {'format': 'png', 'scale': 3}})
-
-
-def kpi(label: str, value: str, sub: str = '', color: str = '#2563eb') -> None:
-    st.markdown(f"<div class='kpi' style='--c:{color}'><span>{label}</span><b>{value}</b><em>{sub}</em></div>", unsafe_allow_html=True)
-
-
-def panel(title: str) -> None:
-    st.markdown(f"<div class='ph'>{title}</div>", unsafe_allow_html=True)
-
-
+# ------------------------------------------------------------------ risk bands
 def band_of(p: float, thr: float) -> tuple[str, str]:
-    return ('HIGH', '#dc2626') if p >= thr else ('WATCH', '#d97706') if p >= thr / 2 else ('LOW', '#059669')
+    return ('HIGH', '#f43f5e') if p >= thr else ('WATCH', '#f59e0b') if p >= thr / 2 else ('LOW', '#10b981')
 
 
 # ------------------------------------------------------------------ demo customers (Part 5: prepare the demo in advance)
@@ -331,20 +278,17 @@ critical_ok = all(ok for name, ok, _ in CHECKS[:6])
 
 # ------------------------------------------------------------------ top bar
 now = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-st.markdown(
-    f"<div class='top'><div class='brand'><div class='emb'></div><div><b>Churn Risk Advisor</b><small>Retention mission control</small></div></div>"
-    f"<div class='chips'><div class='chip {'ok' if critical_ok else 'bad'}'>STATUS <b>{'NOMINAL' if critical_ok else 'CHECK'}</b></div>"
-    f"<div class='chip'>MODEL <b>{type(FINAL).__name__}</b></div>"
-    f"<div class='chip'>FEATURES <b>{len(COLS)}</b></div><div class='chip'>THRESHOLD <b>{threshold:.2f}</b></div>"
-    f"<div class='chip {'ok' if par_ok else 'bad'}'>PARITY <b>{'PASS' if par_ok else 'N/A' if par_gap is None else 'FAIL'}</b></div>"
-    f"<div class='chip {'ok' if ver_ok else 'bad'}'>SKLEARN <b>{sklearn.__version__}</b></div><div class='chip'>{now}</div></div></div>",
-    unsafe_allow_html=True)
+topbar('Churn Risk Advisor', 'Retention mission control',
+       [('STATUS', 'NOMINAL' if critical_ok else 'CHECK', 'ok' if critical_ok else 'bad'), ('MODEL', type(FINAL).__name__, ''),
+        ('FEATURES', str(len(COLS)), ''), ('THRESHOLD', f'{threshold:.2f}', ''),
+        ('PARITY', 'PASS' if par_ok else 'N/A' if par_gap is None else 'FAIL', 'ok' if par_ok else 'bad'),
+        ('SKLEARN', sklearn.__version__, 'ok' if ver_ok else 'bad'), (now, '', '')])
 if not critical_ok:
     st.warning('One or more system checks failed. Open the Model & checks tab before trusting any score.')
 
 TAB = dict(zip(["ov", "wi", "rm", "ex", "sg", "rp", "fl", "rs", "md", "gd"], st.tabs(
-    ["Overview", "What-if lab", "Risk maps", "Explainability", "Segments", "Retention planner", "Fleet scoring",
-     "Customer report", "Model & checks", "Guide"])))
+    ["🏠 Overview", "🎛️ What-if lab", "🗺️ Risk maps", "🔎 Explainability", "👥 Segments", "💰 Retention planner", "📂 Fleet scoring",
+     "📝 Customer report", "✅ Model & checks", "📘 Guide"])))
 
 
 # ------------------------------------------------------------------ cached model-driven grids
@@ -382,16 +326,16 @@ with TAB['ov']:
     with c1: kpi('Churn probability', f'{p:.0%}', 'model estimate', bcol)
     with c2: kpi('Risk band', band, f'HIGH at {threshold:.0%}, WATCH at {threshold/2:.0%}', bcol)
     with c3: kpi('Recommended action', action, 'decision support only', bcol)
-    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', '#d97706')
+    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', '#f59e0b')
     left, right = st.columns([1, 1.25])
     with left, st.container(border=True):
         panel('Risk gauge')
         g = go.Figure(go.Indicator(mode='gauge+number', value=p * 100,
-                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color='#0f172a')),
-                                   gauge=dict(axis=dict(range=[0, 100], tickcolor='#64748b'), bar=dict(color='#0f172a', thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
+                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color='#eef2ff')),
+                                   gauge=dict(axis=dict(range=[0, 100], tickcolor='#a5b1cb'), bar=dict(color='#eef2ff', thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
                                               steps=[dict(range=[0, threshold * 50], color='rgba(5,150,105,.35)'), dict(range=[threshold * 50, threshold * 100], color='rgba(217,119,6,.35)'),
                                                      dict(range=[threshold * 100, 100], color='rgba(220,38,38,.38)')],
-                                              threshold=dict(line=dict(color='#0f172a', width=3), thickness=.9, value=threshold * 100))))
+                                              threshold=dict(line=dict(color='#eef2ff', width=3), thickness=.9, value=threshold * 100))))
         show(sty(g, 300), 'ov_gauge')
         if sample_p is not None:
             pct = float((sample_p < p).mean())
@@ -400,10 +344,10 @@ with TAB['ov']:
         panel('Churn curve by contract, this customer profile')
         T, cv = curves(rj)
         fig = go.Figure()
-        for (c, y), col in zip(cv.items(), ['#dc2626', '#d97706', '#059669']):
+        for (c, y), col in zip(cv.items(), ['#f43f5e', '#f59e0b', '#10b981']):
             fig.add_trace(go.Scatter(x=T, y=y * 100, name=c, mode='lines', line=dict(color=col, width=3)))
-        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=15, color='#0f172a', line=dict(color=bcol, width=3))))
-        fig.add_hline(y=threshold * 100, line=dict(color='#2563eb', dash='dot'), annotation_text='threshold')
+        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=15, color='#eef2ff', line=dict(color=bcol, width=3))))
+        fig.add_hline(y=threshold * 100, line=dict(color='#8b5cf6', dash='dot'), annotation_text='threshold')
         show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Churn probability (%)'), 'ov_curves')
     st.markdown("<div class='note'>Charts are model estimates from patterns in one dataset. They describe association, not guaranteed effects.</div>", unsafe_allow_html=True)
 
@@ -449,7 +393,7 @@ with TAB['wi']:
         if wi.empty:
             st.info('No what-if options apply to this profile.')
         else:
-            colors = ['#059669' if d < 0 else '#dc2626' for d in wi['Difference']]
+            colors = ['#10b981' if d < 0 else '#f43f5e' for d in wi['Difference']]
             fig = go.Figure(go.Bar(x=wi['Difference'] * 100, y=wi['Change'], orientation='h', marker_color=colors,
                                    text=[f'{d*100:+.1f} pts' for d in wi['Difference']], textposition='outside', cliponaxis=False))
             fig.update_yaxes(autorange='reversed')
@@ -470,10 +414,10 @@ with TAB['wi']:
             deltas = [p * 100] + [(vals[i + 1] - vals[i]) * 100 for i in range(len(plan))] + [vals[-1] * 100]
             fig = go.Figure(go.Waterfall(x=labels, y=deltas, measure=['absolute'] + ['relative'] * len(plan) + ['total'],
                                          text=[f'{d:+.1f}' if 0 < i < len(labels) - 1 else f'{d:.0f}%' for i, d in enumerate(deltas)],
-                                         textposition='outside', connector=dict(line=dict(color='rgba(15,23,42,.25)')),
-                                         decreasing=dict(marker=dict(color='#059669')), increasing=dict(marker=dict(color='#dc2626')),
-                                         totals=dict(marker=dict(color='#2563eb'))))
-            fig.add_hline(y=threshold * 100, line=dict(color='#dc2626', dash='dot'), annotation_text='threshold')
+                                         textposition='outside', connector=dict(line=dict(color='rgba(148,163,184,.4)')),
+                                         decreasing=dict(marker=dict(color='#10b981')), increasing=dict(marker=dict(color='#f43f5e')),
+                                         totals=dict(marker=dict(color='#8b5cf6'))))
+            fig.add_hline(y=threshold * 100, line=dict(color='#f43f5e', dash='dot'), annotation_text='threshold')
             show(sty(fig, 340, yaxis_title='Churn probability (%)', showlegend=False), 'wi_waterfall')
             st.markdown(f"<div class='note'>Combined, these {len(plan)} changes move the score from <b>{p:.0%}</b> to <b>{plan[-1][1]:.0%}</b>. "
                         "Changes interact, so the combined drop is not the sum of the single drops above.</div>", unsafe_allow_html=True)
@@ -489,8 +433,8 @@ with TAB['rm']:
         fig = go.Figure(go.Heatmap(x=T, y=M, z=Z * 100, colorscale=SCALE, zmin=0, zmax=100, colorbar=dict(title='%'),
                                    hovertemplate='tenure %{x} mo<br>$%{y}/mo<br>risk %{z:.0f}%<extra></extra>'))
         fig.add_trace(go.Contour(x=T, y=M, z=Z * 100, contours=dict(start=threshold * 100, end=threshold * 100, size=1, coloring='none'),
-                                 line=dict(color='#0f172a', width=2, dash='dash'), showscale=False, hoverinfo='skip', name='threshold'))
-        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color='#0f172a', symbol='x', line=dict(width=2))))
+                                 line=dict(color='#eef2ff', width=2, dash='dash'), showscale=False, hoverinfo='skip', name='threshold'))
+        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color='#eef2ff', symbol='x', line=dict(width=2))))
         show(sty(fig, 420, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'), 'rm_surface')
         st.caption('The dashed line is the contact threshold: customers above and to the left of it would be contacted.')
     h1, h2 = st.columns(2)
@@ -515,7 +459,7 @@ with TAB['ex']:
             st.info(f'Per-customer explanations are available for XGBoost and Logistic Regression, not {type(FINAL).__name__}.')
         else:
             top = cs.reindex(cs.abs().sort_values(ascending=False).index).head(10)
-            fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=['#dc2626' if v > 0 else '#059669' for v in top.values]))
+            fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=['#f43f5e' if v > 0 else '#10b981' for v in top.values]))
             fig.update_yaxes(autorange='reversed')
             show(sty(fig, 400, xaxis_title='Contribution to log-odds of churn'), 'ex_local')
             st.caption(f'Red pushes toward churn, green pushes away. Values: {cs_label}. A field set to its baseline category '
@@ -567,25 +511,25 @@ with TAB['fl']:
             n_hi = int((d['contact'] == 'Yes').sum())
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi('Customers scored', f'{len(d):,}', 'rows in file')
-            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', '#dc2626')
-            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', '#d97706')
-            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', f'sum of p x PKR {FN_COST:,}', '#d97706')
+            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', '#f43f5e')
+            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', '#f59e0b')
+            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', f'sum of p x PKR {FN_COST:,}', '#f59e0b')
             r1, r2 = st.columns([1.4, 1])
             with r1, st.container(border=True):
                 panel('Distribution of churn probability')
-                fig = go.Figure(go.Histogram(x=d.p_churn * 100, xbins=dict(start=0, end=100, size=5), marker=dict(color='#2563eb', line=dict(color='#ffffff', width=1))))
-                fig.add_vline(x=threshold * 100, line=dict(color='#dc2626', dash='dash'), annotation_text='threshold')
+                fig = go.Figure(go.Histogram(x=d.p_churn * 100, xbins=dict(start=0, end=100, size=5), marker=dict(color='#8b5cf6', line=dict(color='#0b1020', width=1))))
+                fig.add_vline(x=threshold * 100, line=dict(color='#f43f5e', dash='dash'), annotation_text='threshold')
                 show(sty(fig, 320, xaxis_title='Churn probability (%)', yaxis_title='Customers'), 'fl_hist')
             with r2, st.container(border=True):
                 panel('Customers by band')
                 cnt = d['band'].value_counts().reindex(['HIGH', 'WATCH', 'LOW']).fillna(0)
-                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=['#dc2626', '#d97706', '#059669']), sort=False))
+                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=['#f43f5e', '#f59e0b', '#10b981']), sort=False))
                 show(sty(fig, 320), 'fl_pie')
             r3, r4 = st.columns(2)
             with r3, st.container(border=True):
                 panel('Tenure vs monthly charges, colored by risk')
                 fig = go.Figure(go.Scatter(x=d.tenure, y=d.MonthlyCharges, mode='markers', text=d.get('customerID'),
-                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=1, color='#ffffff'))))
+                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=1, color='#0b1020'))))
                 show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'), 'fl_scatter')
             with r4, st.container(border=True):
                 panel('Average risk: contract x internet service')
@@ -622,7 +566,7 @@ with TAB['sg']:
         seg = seg[seg['count'] >= 3].sort_values('mean', ascending=False)
         if not seg.empty:
             t = seg.iloc[0]
-            st.markdown(f"<div class='kpi' style='--c:#dc2626'><span>Riskiest named segment (n of at least 3)</span><b style='font-size:1.4rem'>{t.Contract} + {t.InternetService}</b>"
+            st.markdown(f"<div class='kpi' style='--c:#f43f5e'><span>Riskiest named segment (n of at least 3)</span><b style='font-size:1.4rem'>{t.Contract} + {t.InternetService}</b>"
                         f"<em>Average risk {t['mean']:.0%} across {int(t['count'])} customers. Suggested test: offer a one-year contract incentive or an autopay switch to a small group and compare with an untouched group.</em></div>", unsafe_allow_html=True)
         dims = ['Contract', 'InternetService', 'PaymentMethod', 'Tenure_band', 'Senior', 'PaperlessBilling']
         for chunk in (dims[:3], dims[3:]):
@@ -662,21 +606,21 @@ with TAB['rp']:
         best = o.loc[o.net.idxmax()]
         k1, k2, k3, k4 = st.columns(4)
         with k1: kpi('Customers contacted', f'{int(cur.n)}', f'of {len(pool_p)} at threshold {threshold:.2f}')
-        with k2: kpi('Offer spend', f'PKR {cur.n*ocost:,.0f}', f'expected churners reached: {cur.caught:.0%}', '#d97706')
-        with k3: kpi('Expected net value', f'PKR {cur.net:,.0f}', 'saved value minus spend', '#059669' if cur.net >= 0 else '#dc2626')
-        with k4: kpi('Best threshold', f'{best.t:.2f}', f'net PKR {best.net:,.0f}', '#2563eb')
+        with k2: kpi('Offer spend', f'PKR {cur.n*ocost:,.0f}', f'expected churners reached: {cur.caught:.0%}', '#f59e0b')
+        with k3: kpi('Expected net value', f'PKR {cur.net:,.0f}', 'saved value minus spend', '#10b981' if cur.net >= 0 else '#f43f5e')
+        with k4: kpi('Best threshold', f'{best.t:.2f}', f'net PKR {best.net:,.0f}', '#8b5cf6')
         p1, p2 = st.columns(2)
         with p1, st.container(border=True):
             panel('Expected net value by threshold')
-            fig = go.Figure(go.Scatter(x=o.t, y=o.net, mode='lines+markers', line=dict(color='#2563eb', width=3), fill='tozeroy', fillcolor='rgba(37,99,235,.10)'))
-            fig.add_vline(x=threshold, line=dict(color='#0f172a', dash='dot'), annotation_text='your threshold')
+            fig = go.Figure(go.Scatter(x=o.t, y=o.net, mode='lines+markers', line=dict(color='#8b5cf6', width=3), fill='tozeroy', fillcolor='rgba(139,92,246,.18)'))
+            fig.add_vline(x=threshold, line=dict(color='#eef2ff', dash='dot'), annotation_text='your threshold')
             show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'), 'rp_net')
         with p2, st.container(border=True):
             panel('Expected misclassification cost by threshold')
-            fig = go.Figure(go.Scatter(x=o.t, y=o.cost, mode='lines+markers', name='Expected cost', line=dict(color='#d97706', width=3)))
+            fig = go.Figure(go.Scatter(x=o.t, y=o.cost, mode='lines+markers', name='Expected cost', line=dict(color='#f59e0b', width=3)))
             mn = o.loc[o.cost.idxmin()]
-            fig.add_trace(go.Scatter(x=[mn.t], y=[mn.cost], mode='markers', name=f'Minimum at {mn.t:.2f}', marker=dict(size=14, color='#059669')))
-            fig.add_vline(x=threshold, line=dict(color='#0f172a', dash='dot'))
+            fig.add_trace(go.Scatter(x=[mn.t], y=[mn.cost], mode='markers', name=f'Minimum at {mn.t:.2f}', marker=dict(size=14, color='#10b981')))
+            fig.add_vline(x=threshold, line=dict(color='#eef2ff', dash='dot'))
             show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'), 'rp_cost')
         st.caption(f'Planning estimate on the {pool_name} ({len(pool_p)} customers), using model probabilities and the assumptions above. '
                    'Cost curve: each contacted non-churner costs one offer, each missed churner costs the customer value. '
@@ -711,8 +655,8 @@ with TAB['md']:
     m1, m2, m3, m4 = st.columns(4)
     with m1: kpi('CV AUC', mfmt('cv_auc'), f"± {mfmt('cv_auc_std')}")
     with m2: kpi('Test AUC', mfmt('test_auc'), 'test set used once')
-    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', '#d97706')
-    with m4: kpi('Features', str(len(COLS)), 'encoded columns', '#059669')
+    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', '#f59e0b')
+    with m4: kpi('Features', str(len(COLS)), 'encoded columns', '#10b981')
     k1, k2 = st.columns(2)
     with k1, st.container(border=True):
         panel('System checks')
@@ -731,9 +675,9 @@ with TAB['md']:
         X_wrong = pd.get_dummies(customer[RAW_COLS], drop_first=True).reindex(columns=COLS, fill_value=0).astype(float)
         p_wrong = float(score_X(X_wrong)[0])
         s1, s2, s3 = st.columns(3)
-        with s1: kpi('Serving encoder', f'{p:.1%}', f'{int(X_right.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#059669')
-        with s2: kpi('drop_first=True on one row', f'{p_wrong:.1%}', f'{int(X_wrong.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#dc2626')
-        with s3: kpi('Silent error', f'{(p_wrong - p) * 100:+.1f} pts', 'no exception is raised', '#d97706')
+        with s1: kpi('Serving encoder', f'{p:.1%}', f'{int(X_right.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#10b981')
+        with s2: kpi('drop_first=True on one row', f'{p_wrong:.1%}', f'{int(X_wrong.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#f43f5e')
+        with s3: kpi('Silent error', f'{(p_wrong - p) * 100:+.1f} pts', 'no exception is raised', '#f59e0b')
         diff = pd.DataFrame({'serving': X_right.iloc[0], 'drop_first': X_wrong.iloc[0]})
         diff = diff[diff.serving != diff.drop_first]
         if not diff.empty:
@@ -752,7 +696,9 @@ with TAB['gd']:
         st.markdown("1. Describe a customer in the **sidebar**, or load a demo customer. Everything updates at once.\n2. Read the **Overview** for probability, band and action.\n"
                     "3. Use **What-if lab** to test plan changes on the same customer, one at a time and stacked.\n"
                     "4. Check **Explainability** to see what drives the score.\n5. Use **Fleet scoring** for many customers; an uploaded file also feeds **Segments** and **Retention planner**.\n"
-                    "6. Save a one-page summary from **Customer report**.\n7. **Model & checks** proves the app scores exactly like the notebook.")
+                    "6. Save a one-page summary from **Customer report**.\n7. **Model & checks** proves the app scores exactly like the notebook.\n"
+                    "8. Switch the sidebar **Workspace** to **Dataset Lab** to upload *any* CSV/Excel file, explore it, and train and compare "
+                    "up to 8 ML algorithms on it (or cluster it with K-Means).")
         st.markdown(f"**Bands:** HIGH at or above {threshold:.0%}, WATCH from {threshold/2:.0%} to {threshold:.0%}, LOW below that. The threshold changes the band, never the probability.")
     with g2, st.container(border=True):
         panel('Glossary and limits')
