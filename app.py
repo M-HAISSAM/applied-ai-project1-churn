@@ -27,10 +27,9 @@ inject()
 
 # ------------------------------------------------------------------ workspace switch: the churn advisor or the any-dataset lab
 ROOT = Path(__file__).resolve().parent
-with st.sidebar:
-    st.markdown("## Workspace")
-    mode = st.radio('Workspace', ['📊 Churn Risk Advisor', '🧪 Dataset Lab (any data)'], key='mode', label_visibility='collapsed')
-    st.divider()
+# on the main page, not the sidebar, so it is visible even when the sidebar is collapsed (e.g. on a phone)
+mode = st.radio('Workspace', ['📊 Churn Risk Advisor', '🧪 Dataset Lab: upload any data & run ML'], key='mode',
+                horizontal=True, label_visibility='collapsed')
 if mode.startswith('🧪'):
     dataset_lab.render(str(ROOT))
     st.stop()
@@ -697,7 +696,7 @@ with TAB['gd']:
                     "3. Use **What-if lab** to test plan changes on the same customer, one at a time and stacked.\n"
                     "4. Check **Explainability** to see what drives the score.\n5. Use **Fleet scoring** for many customers; an uploaded file also feeds **Segments** and **Retention planner**.\n"
                     "6. Save a one-page summary from **Customer report**.\n7. **Model & checks** proves the app scores exactly like the notebook.\n"
-                    "8. Switch the sidebar **Workspace** to **Dataset Lab** to upload *any* CSV/Excel file, explore it, and train and compare "
+                    "8. Use the switch at the top of the page to open **Dataset Lab** to upload *any* CSV/Excel file, explore it, and train and compare "
                     "up to 8 ML algorithms on it (or cluster it with K-Means).")
         st.markdown(f"**Bands:** HIGH at or above {threshold:.0%}, WATCH from {threshold/2:.0%} to {threshold:.0%}, LOW below that. The threshold changes the band, never the probability.")
     with g2, st.container(border=True):
