@@ -321,7 +321,7 @@ def section_overview(df: pd.DataFrame, raw: pd.DataFrame, log: list[str], kinds:
 
     with st.container(border=True):
         panel('Data preview')
-        st.dataframe(df.head(200), use_container_width=True, height=300)
+        st.dataframe(df.head(200), width='stretch', height=300)
     a, b = st.columns([1.3, 1])
     with a, st.container(border=True):
         panel('Column profile')
@@ -329,12 +329,12 @@ def section_overview(df: pd.DataFrame, raw: pd.DataFrame, log: list[str], kinds:
                                                             + (' · text' if c in kinds['text'] else '') for c in df.columns],
                              'Missing %': (miss / max(len(df), 1) * 100).round(1).values, 'Unique': df.nunique().values,
                              'Example': [str(df[c].dropna().iloc[0])[:30] if df[c].notna().any() else '' for c in df.columns]})
-        st.dataframe(prof, hide_index=True, use_container_width=True, height=360,
+        st.dataframe(prof, hide_index=True, width='stretch', height=360,
                      column_config={'Missing %': st.column_config.ProgressColumn('Missing %', min_value=0, max_value=100, format='%.1f%%')})
     with b, st.container(border=True):
         panel('Summary statistics (numeric)')
         if kinds['num']:
-            st.dataframe(df[kinds['num']].describe().T.round(3), use_container_width=True, height=360)
+            st.dataframe(df[kinds['num']].describe().T.round(3), width='stretch', height=360)
         else:
             st.info('No numeric columns.')
 
@@ -380,7 +380,7 @@ def section_explore(df: pd.DataFrame, kinds: dict) -> None:
             pairs = corr.where(np.triu(np.ones(corr.shape, dtype=bool), 1)).stack().rename('r').reset_index()
             pairs.columns = ['Column A', 'Column B', 'r']
             pairs = pairs.reindex(pairs.r.abs().sort_values(ascending=False).index).head(12)
-            st.dataframe(pairs.round(3), hide_index=True, use_container_width=True, height=300,
+            st.dataframe(pairs.round(3), hide_index=True, width='stretch', height=300,
                          column_config={'r': st.column_config.ProgressColumn('Correlation r', min_value=-1, max_value=1, format='%.2f')})
             out = {c: int(((df[c] < df[c].quantile(.25) - 1.5 * (df[c].quantile(.75) - df[c].quantile(.25))) |
                            (df[c] > df[c].quantile(.75) + 1.5 * (df[c].quantile(.75) - df[c].quantile(.25)))).sum()) for c in num}
@@ -431,7 +431,7 @@ def section_train(df: pd.DataFrame, kinds: dict, sig: str) -> None:
         test_size = f2.slider('Test set size', .1, .4, .2, .05)
         folds = f3.slider('Cross-validation folds', 3, 10, 5)
         max_rows = f4.number_input('Max rows to train on', 500, 500_000, 30_000, 500)
-        go_btn = st.form_submit_button('🚀 Train & compare models', type='primary', use_container_width=True)
+        go_btn = st.form_submit_button('🚀 Train & compare models', type='primary', width='stretch')
     if go_btn:
         if not feats or not algos:
             st.error('Pick at least one feature and one algorithm.')
@@ -496,7 +496,7 @@ def render_results(res: dict) -> None:
         panel('Leaderboard')
         fmt = {c: st.column_config.NumberColumn(c, format='%.3f') for c in board.columns if c not in ('Model',)}
         fmt['Seconds'] = st.column_config.NumberColumn('Seconds', format='%.2f')
-        st.dataframe(board, hide_index=True, use_container_width=True, column_config=fmt)
+        st.dataframe(board, hide_index=True, width='stretch', column_config=fmt)
     with b, st.container(border=True):
         panel('Score spread across CV folds')
         fig = go.Figure()
@@ -695,7 +695,7 @@ def section_predict(df: pd.DataFrame, sig: str, name: str, kinds: dict, log: lis
                 outp[f'predicted_{res["target"]}'] = np.round(pred, 4)
                 fig = px.histogram(x=pred, nbins=40, color_discrete_sequence=[ACC2])
                 show(sty(fig, 260, xaxis_title='Prediction'), 'lab_pred_dist')
-            st.dataframe(outp.head(100), use_container_width=True, height=260)
+            st.dataframe(outp.head(100), width='stretch', height=260)
             st.download_button('Download predictions (.csv)', outp.to_csv(index=False), 'predictions.csv', 'text/csv', type='primary')
 
 
