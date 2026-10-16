@@ -30,6 +30,8 @@ theme = _fresh(theme)              # theme first: dataset_lab imports from it
 dataset_lab = _fresh(dataset_lab)
 SCALE, inject, kpi, panel, show, sty, topbar = (theme.SCALE, theme.inject, theme.kpi, theme.panel, theme.show,
                                                 theme.sty, theme.topbar)
+ACC, ACC2, AMB, BG, GRN, INK, LINE2, MUT, RED, WHITE = (theme.ACC, theme.ACC2, theme.AMB, theme.BG, theme.GRN, theme.INK,
+                                                       theme.LINE2, theme.MUT, theme.RED, theme.WHITE)
 
 try:
     import xgboost as xgb
@@ -196,7 +198,7 @@ def mfmt(key: str, f: str = '{:.3f}') -> str:
 
 # ------------------------------------------------------------------ risk bands
 def band_of(p: float, thr: float) -> tuple[str, str]:
-    return ('HIGH', '#f43f5e') if p >= thr else ('WATCH', '#f59e0b') if p >= thr / 2 else ('LOW', '#10b981')
+    return ('HIGH', RED) if p >= thr else ('WATCH', AMB) if p >= thr / 2 else ('LOW', GRN)
 
 
 # ------------------------------------------------------------------ demo customers (Part 5: prepare the demo in advance)
@@ -341,16 +343,16 @@ with TAB['ov']:
     with c1: kpi('Churn probability', f'{p:.0%}', 'model estimate', bcol)
     with c2: kpi('Risk band', band, f'HIGH at {threshold:.0%}, WATCH at {threshold/2:.0%}', bcol)
     with c3: kpi('Recommended action', action, 'decision support only', bcol)
-    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', '#f59e0b')
+    with c4: kpi('Expected loss if ignored', f'PKR {p*FN_COST:,.0f}', f'{p:.0%} x PKR {FN_COST:,} per lost customer', AMB)
     left, right = st.columns([1, 1.25])
     with left, st.container(border=True):
         panel('Risk gauge')
         g = go.Figure(go.Indicator(mode='gauge+number', value=p * 100,
-                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color='#eef2ff')),
-                                   gauge=dict(axis=dict(range=[0, 100], tickcolor='#a5b1cb'), bar=dict(color='#eef2ff', thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
-                                              steps=[dict(range=[0, threshold * 50], color='rgba(5,150,105,.35)'), dict(range=[threshold * 50, threshold * 100], color='rgba(217,119,6,.35)'),
-                                                     dict(range=[threshold * 100, 100], color='rgba(220,38,38,.38)')],
-                                              threshold=dict(line=dict(color='#eef2ff', width=3), thickness=.9, value=threshold * 100))))
+                                   number=dict(suffix='%', valueformat='.0f', font=dict(family='JetBrains Mono', size=46, color=INK)),
+                                   gauge=dict(axis=dict(range=[0, 100], tickcolor=MUT), bar=dict(color=INK, thickness=.16), bgcolor='rgba(0,0,0,0)', borderwidth=0,
+                                              steps=[dict(range=[0, threshold * 50], color='rgba(52,211,153,.13)'), dict(range=[threshold * 50, threshold * 100], color='rgba(251,191,36,.13)'),
+                                                     dict(range=[threshold * 100, 100], color='rgba(248,113,113,.16)')],
+                                              threshold=dict(line=dict(color=INK, width=3), thickness=.9, value=threshold * 100))))
         show(sty(g, 300), 'ov_gauge')
         if sample_p is not None:
             pct = float((sample_p < p).mean())
@@ -359,10 +361,10 @@ with TAB['ov']:
         panel('Churn curve by contract, this customer profile')
         T, cv = curves(rj)
         fig = go.Figure()
-        for (c, y), col in zip(cv.items(), ['#f43f5e', '#f59e0b', '#10b981']):
+        for (c, y), col in zip(cv.items(), [RED, AMB, GRN]):
             fig.add_trace(go.Scatter(x=T, y=y * 100, name=c, mode='lines', line=dict(color=col, width=3)))
-        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=15, color='#eef2ff', line=dict(color=bcol, width=3))))
-        fig.add_hline(y=threshold * 100, line=dict(color='#8b5cf6', dash='dot'), annotation_text='threshold')
+        fig.add_trace(go.Scatter(x=[tenure], y=[p * 100], name='This customer', mode='markers', marker=dict(size=15, color=INK, line=dict(color=bcol, width=3))))
+        fig.add_hline(y=threshold * 100, line=dict(color=INK, dash='dot'), annotation_text='threshold')
         show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Churn probability (%)'), 'ov_curves')
     st.markdown("<div class='note'>Charts are model estimates from patterns in one dataset. They describe association, not guaranteed effects.</div>", unsafe_allow_html=True)
 
@@ -408,7 +410,7 @@ with TAB['wi']:
         if wi.empty:
             st.info('No what-if options apply to this profile.')
         else:
-            colors = ['#10b981' if d < 0 else '#f43f5e' for d in wi['Difference']]
+            colors = [GRN if d < 0 else RED for d in wi['Difference']]
             fig = go.Figure(go.Bar(x=wi['Difference'] * 100, y=wi['Change'], orientation='h', marker_color=colors,
                                    text=[f'{d*100:+.1f} pts' for d in wi['Difference']], textposition='outside', cliponaxis=False))
             fig.update_yaxes(autorange='reversed')
@@ -429,10 +431,10 @@ with TAB['wi']:
             deltas = [p * 100] + [(vals[i + 1] - vals[i]) * 100 for i in range(len(plan))] + [vals[-1] * 100]
             fig = go.Figure(go.Waterfall(x=labels, y=deltas, measure=['absolute'] + ['relative'] * len(plan) + ['total'],
                                          text=[f'{d:+.1f}' if 0 < i < len(labels) - 1 else f'{d:.0f}%' for i, d in enumerate(deltas)],
-                                         textposition='outside', connector=dict(line=dict(color='rgba(148,163,184,.4)')),
-                                         decreasing=dict(marker=dict(color='#10b981')), increasing=dict(marker=dict(color='#f43f5e')),
-                                         totals=dict(marker=dict(color='#8b5cf6'))))
-            fig.add_hline(y=threshold * 100, line=dict(color='#f43f5e', dash='dot'), annotation_text='threshold')
+                                         textposition='outside', connector=dict(line=dict(color=LINE2)),
+                                         decreasing=dict(marker=dict(color=GRN)), increasing=dict(marker=dict(color=RED)),
+                                         totals=dict(marker=dict(color=WHITE))))
+            fig.add_hline(y=threshold * 100, line=dict(color=RED, dash='dot'), annotation_text='threshold')
             show(sty(fig, 340, yaxis_title='Churn probability (%)', showlegend=False), 'wi_waterfall')
             st.markdown(f"<div class='note'>Combined, these {len(plan)} changes move the score from <b>{p:.0%}</b> to <b>{plan[-1][1]:.0%}</b>. "
                         "Changes interact, so the combined drop is not the sum of the single drops above.</div>", unsafe_allow_html=True)
@@ -448,8 +450,8 @@ with TAB['rm']:
         fig = go.Figure(go.Heatmap(x=T, y=M, z=Z * 100, colorscale=SCALE, zmin=0, zmax=100, colorbar=dict(title='%'),
                                    hovertemplate='tenure %{x} mo<br>$%{y}/mo<br>risk %{z:.0f}%<extra></extra>'))
         fig.add_trace(go.Contour(x=T, y=M, z=Z * 100, contours=dict(start=threshold * 100, end=threshold * 100, size=1, coloring='none'),
-                                 line=dict(color='#eef2ff', width=2, dash='dash'), showscale=False, hoverinfo='skip', name='threshold'))
-        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color='#eef2ff', symbol='x', line=dict(width=2))))
+                                 line=dict(color=INK, width=2, dash='dash'), showscale=False, hoverinfo='skip', name='threshold'))
+        fig.add_trace(go.Scatter(x=[tenure], y=[monthly], mode='markers', name='This customer', marker=dict(size=15, color=INK, symbol='x', line=dict(width=2))))
         show(sty(fig, 420, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'), 'rm_surface')
         st.caption('The dashed line is the contact threshold: customers above and to the left of it would be contacted.')
     h1, h2 = st.columns(2)
@@ -474,7 +476,7 @@ with TAB['ex']:
             st.info(f'Per-customer explanations are available for XGBoost and Logistic Regression, not {type(FINAL).__name__}.')
         else:
             top = cs.reindex(cs.abs().sort_values(ascending=False).index).head(10)
-            fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=['#f43f5e' if v > 0 else '#10b981' for v in top.values]))
+            fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation='h', marker_color=[RED if v > 0 else GRN for v in top.values]))
             fig.update_yaxes(autorange='reversed')
             show(sty(fig, 400, xaxis_title='Contribution to log-odds of churn'), 'ex_local')
             st.caption(f'Red pushes toward churn, green pushes away. Values: {cs_label}. A field set to its baseline category '
@@ -526,25 +528,25 @@ with TAB['fl']:
             n_hi = int((d['contact'] == 'Yes').sum())
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi('Customers scored', f'{len(d):,}', 'rows in file')
-            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', '#f43f5e')
-            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', '#f59e0b')
-            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', f'sum of p x PKR {FN_COST:,}', '#f59e0b')
+            with k2: kpi('Above threshold', f'{n_hi:,}', f'{n_hi/len(d):.0%} of file', RED)
+            with k3: kpi('Average risk', f'{d.p_churn.mean():.1%}', 'mean probability', AMB)
+            with k4: kpi('Expected loss', f'PKR {d.p_churn.sum()*FN_COST:,.0f}', f'sum of p x PKR {FN_COST:,}', AMB)
             r1, r2 = st.columns([1.4, 1])
             with r1, st.container(border=True):
                 panel('Distribution of churn probability')
-                fig = go.Figure(go.Histogram(x=d.p_churn * 100, xbins=dict(start=0, end=100, size=5), marker=dict(color='#8b5cf6', line=dict(color='#0b1020', width=1))))
-                fig.add_vline(x=threshold * 100, line=dict(color='#f43f5e', dash='dash'), annotation_text='threshold')
+                fig = go.Figure(go.Histogram(x=d.p_churn * 100, xbins=dict(start=0, end=100, size=5), marker=dict(color=ACC2, line=dict(color=BG, width=1))))
+                fig.add_vline(x=threshold * 100, line=dict(color=RED, dash='dash'), annotation_text='threshold')
                 show(sty(fig, 320, xaxis_title='Churn probability (%)', yaxis_title='Customers'), 'fl_hist')
             with r2, st.container(border=True):
                 panel('Customers by band')
                 cnt = d['band'].value_counts().reindex(['HIGH', 'WATCH', 'LOW']).fillna(0)
-                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=['#f43f5e', '#f59e0b', '#10b981']), sort=False))
+                fig = go.Figure(go.Pie(labels=cnt.index, values=cnt.values, hole=.62, marker=dict(colors=[RED, AMB, GRN]), sort=False))
                 show(sty(fig, 320), 'fl_pie')
             r3, r4 = st.columns(2)
             with r3, st.container(border=True):
                 panel('Tenure vs monthly charges, colored by risk')
                 fig = go.Figure(go.Scatter(x=d.tenure, y=d.MonthlyCharges, mode='markers', text=d.get('customerID'),
-                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=1, color='#0b1020'))))
+                                           marker=dict(size=11, color=d.p_churn * 100, colorscale=SCALE, cmin=0, cmax=100, colorbar=dict(title='%'), line=dict(width=1, color=BG))))
                 show(sty(fig, 340, xaxis_title='Tenure (months)', yaxis_title='Monthly charges (USD)'), 'fl_scatter')
             with r4, st.container(border=True):
                 panel('Average risk: contract x internet service')
@@ -581,7 +583,7 @@ with TAB['sg']:
         seg = seg[seg['count'] >= 3].sort_values('mean', ascending=False)
         if not seg.empty:
             t = seg.iloc[0]
-            st.markdown(f"<div class='kpi' style='--c:#f43f5e'><span>Riskiest named segment (n of at least 3)</span><b style='font-size:1.4rem'>{t.Contract} + {t.InternetService}</b>"
+            st.markdown(f"<div class='kpi' style='--c:{RED};--v:{RED}'><span>Riskiest named segment (n of at least 3)</span><b style='font-size:1.4rem'>{t.Contract} + {t.InternetService}</b>"
                         f"<em>Average risk {t['mean']:.0%} across {int(t['count'])} customers. Suggested test: offer a one-year contract incentive or an autopay switch to a small group and compare with an untouched group.</em></div>", unsafe_allow_html=True)
         dims = ['Contract', 'InternetService', 'PaymentMethod', 'Tenure_band', 'Senior', 'PaperlessBilling']
         for chunk in (dims[:3], dims[3:]):
@@ -621,21 +623,21 @@ with TAB['rp']:
         best = o.loc[o.net.idxmax()]
         k1, k2, k3, k4 = st.columns(4)
         with k1: kpi('Customers contacted', f'{int(cur.n)}', f'of {len(pool_p)} at threshold {threshold:.2f}')
-        with k2: kpi('Offer spend', f'PKR {cur.n*ocost:,.0f}', f'expected churners reached: {cur.caught:.0%}', '#f59e0b')
-        with k3: kpi('Expected net value', f'PKR {cur.net:,.0f}', 'saved value minus spend', '#10b981' if cur.net >= 0 else '#f43f5e')
-        with k4: kpi('Best threshold', f'{best.t:.2f}', f'net PKR {best.net:,.0f}', '#8b5cf6')
+        with k2: kpi('Offer spend', f'PKR {cur.n*ocost:,.0f}', f'expected churners reached: {cur.caught:.0%}', AMB)
+        with k3: kpi('Expected net value', f'PKR {cur.net:,.0f}', 'saved value minus spend', GRN if cur.net >= 0 else RED)
+        with k4: kpi('Best threshold', f'{best.t:.2f}', f'net PKR {best.net:,.0f}', ACC)
         p1, p2 = st.columns(2)
         with p1, st.container(border=True):
             panel('Expected net value by threshold')
-            fig = go.Figure(go.Scatter(x=o.t, y=o.net, mode='lines+markers', line=dict(color='#8b5cf6', width=3), fill='tozeroy', fillcolor='rgba(139,92,246,.18)'))
-            fig.add_vline(x=threshold, line=dict(color='#eef2ff', dash='dot'), annotation_text='your threshold')
+            fig = go.Figure(go.Scatter(x=o.t, y=o.net, mode='lines+markers', line=dict(color=ACC2, width=2.5), marker=dict(color=WHITE, size=6), fill='tozeroy', fillcolor='rgba(91,141,239,.22)'))
+            fig.add_vline(x=threshold, line=dict(color=INK, dash='dot'), annotation_text='your threshold')
             show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'), 'rp_net')
         with p2, st.container(border=True):
             panel('Expected misclassification cost by threshold')
-            fig = go.Figure(go.Scatter(x=o.t, y=o.cost, mode='lines+markers', name='Expected cost', line=dict(color='#f59e0b', width=3)))
+            fig = go.Figure(go.Scatter(x=o.t, y=o.cost, mode='lines+markers', name='Expected cost', line=dict(color=AMB, width=3)))
             mn = o.loc[o.cost.idxmin()]
-            fig.add_trace(go.Scatter(x=[mn.t], y=[mn.cost], mode='markers', name=f'Minimum at {mn.t:.2f}', marker=dict(size=14, color='#10b981')))
-            fig.add_vline(x=threshold, line=dict(color='#eef2ff', dash='dot'))
+            fig.add_trace(go.Scatter(x=[mn.t], y=[mn.cost], mode='markers', name=f'Minimum at {mn.t:.2f}', marker=dict(size=14, color=GRN)))
+            fig.add_vline(x=threshold, line=dict(color=INK, dash='dot'))
             show(sty(fig, 340, xaxis_title='Contact threshold', yaxis_title='PKR'), 'rp_cost')
         st.caption(f'Planning estimate on the {pool_name} ({len(pool_p)} customers), using model probabilities and the assumptions above. '
                    'Cost curve: each contacted non-churner costs one offer, each missed churner costs the customer value. '
@@ -670,8 +672,8 @@ with TAB['md']:
     m1, m2, m3, m4 = st.columns(4)
     with m1: kpi('CV AUC', mfmt('cv_auc'), f"± {mfmt('cv_auc_std')}")
     with m2: kpi('Test AUC', mfmt('test_auc'), 'test set used once')
-    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', '#f59e0b')
-    with m4: kpi('Features', str(len(COLS)), 'encoded columns', '#10b981')
+    with m3: kpi('Threshold', f'{THR0:.2f}', f'FN PKR {FN_COST:,}, FP PKR {FP_COST:,}', AMB)
+    with m4: kpi('Features', str(len(COLS)), 'encoded columns', GRN)
     k1, k2 = st.columns(2)
     with k1, st.container(border=True):
         panel('System checks')
@@ -690,9 +692,9 @@ with TAB['md']:
         X_wrong = pd.get_dummies(customer[RAW_COLS], drop_first=True).reindex(columns=COLS, fill_value=0).astype(float)
         p_wrong = float(score_X(X_wrong)[0])
         s1, s2, s3 = st.columns(3)
-        with s1: kpi('Serving encoder', f'{p:.1%}', f'{int(X_right.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#10b981')
-        with s2: kpi('drop_first=True on one row', f'{p_wrong:.1%}', f'{int(X_wrong.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', '#f43f5e')
-        with s3: kpi('Silent error', f'{(p_wrong - p) * 100:+.1f} pts', 'no exception is raised', '#f59e0b')
+        with s1: kpi('Serving encoder', f'{p:.1%}', f'{int(X_right.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', GRN)
+        with s2: kpi('drop_first=True on one row', f'{p_wrong:.1%}', f'{int(X_wrong.drop(columns=[c for c in NUM_COLS if c in COLS]).iloc[0].sum())} category columns switched on', RED)
+        with s3: kpi('Silent error', f'{(p_wrong - p) * 100:+.1f} pts', 'no exception is raised', AMB)
         diff = pd.DataFrame({'serving': X_right.iloc[0], 'drop_first': X_wrong.iloc[0]})
         diff = diff[diff.serving != diff.drop_first]
         if not diff.empty:

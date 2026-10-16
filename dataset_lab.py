@@ -31,7 +31,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.svm import SVC, SVR
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-from theme import ACC, ACC2, AMB, BLUE, DIV, GRN, INK, MUT, PALETTE, RED, SEQ, kpi, panel, show, sty, topbar
+from theme import ACC, ACC2, AMB, BG, BLUE, DIV, GRN, INK, MUT, PALETTE, RED, SEQ, kpi, panel, show, sty, topbar
 
 try:
     import xgboost as xgb
@@ -291,8 +291,89 @@ def perm_importance(res: dict, name: str) -> pd.Series:
 
 
 # ================================================================== page sections
+TARGET_NAMES = ('target', 'label', 'class', 'churn', 'y', 'outcome', 'price', 'species')
+
+
+@st.cache_data(show_spinner=False)
+def profile_frame(df: pd.DataFrame, kinds: dict) -> dict:
+    """Everything the Overview tab needs that is costly on big files: per-column profile, quality checks, health score."""
+    n = max(len(df), 1)
+    num, cat = kinds['num'], kinds['cat']
+    miss = df.isna().sum()
+    rows = []
+    for c in df.columns:
+        s = df[c].dropna()
+        vc = s.astype(str).value_counts()
+        top, top_share = (vc.index[0][:30], vc.iloc[0] / max(len(s), 1) * 100) if len(vc) else ('', 0.0)
+        if c in num and len(s):
+            spark = np.histogram(s.astype(float), bins=min(15, max(s.nunique(), 1)))[0].tolist()
+            rng = f'{s.min():.4g} … {s.max():.4g}'
+        else:
+            spark, rng = vc.head(12).tolist(), f'{len(vc)} levels'
+        rows.append({'Column': c, 'Type': ('numeric' if c in num else 'categorical') + (' · id' if c in kinds['id'] else '')
+                     + (' · text' if c in kinds['text'] else ''), 'Missing %': round(miss[c] / n * 100, 1),
+                     'Unique': int(df[c].nunique()), 'Top value': top, 'Top share %': round(top_share, 1),
+                     'Range / levels': rng, 'Distribution': spark})
+    prof = pd.DataFrame(rows)
+
+    # outliers (1.5 x IQR) and redundant numeric pairs
+    outl = pd.Series(dtype=float)
+    pairs = []
+    if num:
+        q1, q3 = df[num].quantile(.25), df[num].quantile(.75)
+        iqr = q3 - q1
+        outl = ((df[num] < q1 - 1.5 * iqr) | (df[num] > q3 + 1.5 * iqr)).mean() * 100
+        if len(num) >= 2:
+            corr = df[num[:40]].corr().abs()
+            up = corr.where(np.triu(np.ones(corr.shape, dtype=bool), 1)).stack()
+            pairs = [(a, b, r) for (a, b), r in up[up > .95].sort_values(ascending=False).items()]
+    skewed = df[num].skew(numeric_only=True).abs().pipe(lambda s: s[s > 2]).sort_values(ascending=False) if num else pd.Series(dtype=float)
+    dominated = prof.loc[(prof['Top share %'] > 95) & ~prof['Column'].isin(kinds['id']), 'Column'].tolist()
+    rare = [c for c in cat if c not in kinds['id'] + kinds['text'] and (df[c].value_counts() == 1).sum() >= 3]
+
+    miss_pct = miss.sum() / max(df.size, 1) * 100
+    dup_pct = df.duplicated().mean() * 100 if len(df) else 0
+    penalties = {'Missing values': min(30, miss_pct * 1.5), 'Duplicate rows': min(15, dup_pct * 1.5),
+                 'Outliers': min(10, float(outl.mean()) if len(outl) else 0), 'Redundant columns': min(10, 3 * len(pairs)),
+                 'Dominated columns': min(10, 3 * len(dominated)), 'Too few rows': 15 if len(df) < 100 else (5 if len(df) < 500 else 0)}
+    score = max(0, round(100 - sum(penalties.values())))
+
+    checks = [
+        ('Missing values', miss_pct == 0, f'{miss_pct:.1f}% of cells empty in {int((miss > 0).sum())} column(s)' if miss_pct else 'none'),
+        ('Duplicate rows', dup_pct == 0, f'{int(df.duplicated().sum()):,} exact repeats' if dup_pct else 'none'),
+        ('Enough rows for ML', len(df) >= 500, f'{len(df):,} rows' + ('' if len(df) >= 500 else ': small, scores will be noisy')),
+        ('Redundant numeric columns (|r| > 0.95)', not pairs, ', '.join(f'{a} ≈ {b}' for a, b, _ in pairs[:3]) or 'none'),
+        ('Single-value-dominated columns (> 95%)', not dominated, ', '.join(dominated[:4]) or 'none'),
+        ('Outliers (> 5% of a column)', not (outl > 5).any(), ', '.join(f'{c} {v:.0f}%' for c, v in outl[outl > 5].sort_values(ascending=False).head(4).items()) or 'none'),
+        ('Strongly skewed columns (|skew| > 2)', skewed.empty, ', '.join(skewed.index[:4]) or 'none'),
+        ('Rare categories (3+ levels seen once)', not rare, ', '.join(rare[:4]) or 'none'),
+        ('Identifier / free-text columns', not (kinds['id'] or kinds['text']), ', '.join((kinds['id'] + kinds['text'])[:4]) or 'none'),
+    ]
+
+    # target suggestions: low-cardinality categories or continuous numbers, name hints first
+    cand = []
+    for i, c in enumerate(df.columns):
+        u = df[c].nunique()
+        if c in kinds['id'] or c in kinds['text'] or u < 2:
+            continue
+        task = detect_task(df[c])
+        if task == 'classification' and u > 20:
+            continue
+        sc = 3 * (c.lower() in TARGET_NAMES) + (i == df.shape[1] - 1) + (task == 'classification' and u <= 10)
+        if task == 'classification':
+            share = df[c].value_counts(normalize=True)
+            detail, bal = f'{u} classes, smallest {share.iloc[-1]:.0%}', round(share.iloc[-1] / share.iloc[0] * 100, 1)
+        else:
+            detail, bal = f'mean {df[c].mean():.4g}, std {df[c].std():.4g}', None
+        cand.append({'Column': c, 'Task': task, 'Details': detail, 'Balance %': bal, '_s': sc})
+    targets = pd.DataFrame(cand).sort_values('_s', ascending=False, kind='stable').drop(columns='_s').head(6) if cand else pd.DataFrame()
+
+    return dict(prof=prof, score=score, penalties=penalties, checks=checks, targets=targets)
+
+
 def section_overview(df: pd.DataFrame, raw: pd.DataFrame, log: list[str], kinds: dict) -> None:
     miss = df.isna().sum()
+    p = profile_frame(df, kinds)
     k = st.columns(6)
     with k[0]: kpi('Rows', f'{len(df):,}', f'{len(raw):,} uploaded', ACC)
     with k[1]: kpi('Columns', f'{df.shape[1]}', f"{len(kinds['num'])} numeric · {len(kinds['cat'])} categorical", ACC2)
@@ -319,24 +400,94 @@ def section_overview(df: pd.DataFrame, raw: pd.DataFrame, log: list[str], kinds:
         ins.append('The file looks clean: no missing values, duplicates or identifier columns found.')
     st.markdown("<div class='insight'><ul>" + ''.join(f'<li>{x}</li>' for x in ins) + "</ul></div>", unsafe_allow_html=True)
 
+    # ---- data health: score gauge, column-type mix, quality checklist
+    h1, h2, h3 = st.columns([1, 1, 1.5])
+    with h1, st.container(border=True):
+        panel('Data health score')
+        sc = p['score']
+        col = GRN if sc >= 80 else AMB if sc >= 60 else RED
+        fig = go.Figure(go.Indicator(mode='gauge+number', value=sc, number=dict(suffix=' / 100', font=dict(size=30, color=INK)),
+                                     gauge=dict(axis=dict(range=[0, 100], tickcolor=MUT), bar=dict(color=col, thickness=.3),
+                                                bgcolor='rgba(0,0,0,0)', borderwidth=0,
+                                                steps=[dict(range=[0, 60], color='rgba(248,113,113,.15)'), dict(range=[60, 80], color='rgba(251,191,36,.15)'),
+                                                       dict(range=[80, 100], color='rgba(52,211,153,.15)')])))
+        show(sty(fig, 220).update_layout(margin=dict(l=20, r=20, t=20, b=0)), 'lab_ov_health')
+        lost = {k_: v for k_, v in p['penalties'].items() if v >= .5}
+        st.markdown("<div class='note'>" + ('Points lost: ' + ', '.join(f'<b>{k_}</b> −{v:.0f}' for k_, v in sorted(lost.items(), key=lambda kv: -kv[1]))
+                                            if lost else 'No points lost: the data is ready for modelling.') + '</div>', unsafe_allow_html=True)
+    with h2, st.container(border=True):
+        panel('Column types')
+        mix = {'numeric': len([c for c in kinds['num'] if c not in kinds['id']]),
+               'categorical': len([c for c in kinds['cat'] if c not in kinds['id'] + kinds['text']]),
+               'identifier': len(kinds['id']), 'free text': len(kinds['text'])}
+        mix = {k_: v for k_, v in mix.items() if v}
+        fig = go.Figure(go.Pie(labels=list(mix), values=list(mix.values()), hole=.6, marker=dict(colors=[ACC, ACC2, BLUE, AMB][:len(mix)]),
+                               textinfo='value', sort=False))
+        fig.add_annotation(text=f'<b>{df.shape[1]}</b><br>columns', showarrow=False, font=dict(size=15, color=INK))
+        show(sty(fig, 260).update_layout(margin=dict(l=8, r=8, t=8, b=8)), 'lab_ov_types')
+    with h3, st.container(border=True):
+        panel('Quality checklist')
+        st.markdown("<div class='note'><ul style='padding-left:1rem;margin:0'>" +
+                    ''.join(f"<li>{'✅' if ok else '⚠️'} <b>{lab}</b>: {msg}</li>" for lab, ok, msg in p['checks']) + '</ul></div>',
+                    unsafe_allow_html=True)
+
+    # ---- data preview with view mode, column picker and search
     with st.container(border=True):
         panel('Data preview')
-        st.dataframe(df.head(200), width='stretch', height=300)
+        v1, v2, v3, v4 = st.columns([1.1, 2, 1.4, .9])
+        how = v1.radio('Show', ['First rows', 'Last rows', 'Random sample'], horizontal=False, key='lab_ov_how')
+        pick = v2.multiselect('Columns', list(df.columns), default=list(df.columns), key='lab_ov_cols')
+        q = v3.text_input('Search any cell', '', key='lab_ov_q', placeholder='e.g. Fiber optic')
+        nrows = v4.number_input('Rows', 10, 5000, 200, 50, key='lab_ov_n')
+        view = df[pick or list(df.columns)]
+        if q:
+            view = view[view.astype(str).apply(lambda s: s.str.contains(q, case=False, regex=False)).any(axis=1)]
+        shown = view.head(nrows) if how == 'First rows' else view.tail(nrows) if how == 'Last rows' else view.sample(min(nrows, len(view)), random_state=SEED)
+        st.dataframe(shown, width='stretch', height=320)
+        st.markdown(f"<div class='note'>Showing <b>{len(shown):,}</b> of <b>{len(view):,}</b> matching rows"
+                    + (f" for “{q}”" if q else '') + '.</div>', unsafe_allow_html=True)
+
+    # ---- column profile with sparklines
+    with st.container(border=True):
+        panel('Column profile')
+        st.dataframe(p['prof'], hide_index=True, width='stretch', height=min(38 + 35 * len(p['prof']), 420),
+                     column_config={'Missing %': st.column_config.ProgressColumn('Missing %', min_value=0, max_value=100, format='%.1f%%'),
+                                    'Top share %': st.column_config.ProgressColumn('Top share %', min_value=0, max_value=100, format='%.0f%%'),
+                                    'Distribution': st.column_config.BarChartColumn('Distribution', help='Histogram for numbers, top-12 counts for categories')})
+
+    # ---- summary statistics + suggested targets
     a, b = st.columns([1.3, 1])
     with a, st.container(border=True):
-        panel('Column profile')
-        prof = pd.DataFrame({'Column': df.columns, 'Type': [('numeric' if c in kinds['num'] else 'categorical') + (' · id' if c in kinds['id'] else '')
-                                                            + (' · text' if c in kinds['text'] else '') for c in df.columns],
-                             'Missing %': (miss / max(len(df), 1) * 100).round(1).values, 'Unique': df.nunique().values,
-                             'Example': [str(df[c].dropna().iloc[0])[:30] if df[c].notna().any() else '' for c in df.columns]})
-        st.dataframe(prof, hide_index=True, width='stretch', height=360,
-                     column_config={'Missing %': st.column_config.ProgressColumn('Missing %', min_value=0, max_value=100, format='%.1f%%')})
+        panel('Summary statistics')
+        sn, sc_ = st.tabs(['Numeric', 'Categorical'])
+        with sn:
+            if kinds['num']:
+                d = df[kinds['num']].describe().T
+                d['skew'] = df[kinds['num']].skew(numeric_only=True)
+                d['zeros %'] = (df[kinds['num']] == 0).mean() * 100
+                st.dataframe(d.round(3), width='stretch', height=340)
+            else:
+                st.info('No numeric columns.')
+        with sc_:
+            cats = [c for c in kinds['cat'] if c not in kinds['id']]
+            if cats:
+                st.dataframe(pd.DataFrame({'Column': cats, 'Levels': [df[c].nunique() for c in cats],
+                                           'Most common': [str(df[c].mode().iloc[0])[:30] if df[c].notna().any() else '' for c in cats],
+                                           'Least common': [str(df[c].value_counts().index[-1])[:30] if df[c].notna().any() else '' for c in cats],
+                                           'Missing': [int(df[c].isna().sum()) for c in cats]}),
+                             hide_index=True, width='stretch', height=340)
+            else:
+                st.info('No categorical columns.')
     with b, st.container(border=True):
-        panel('Summary statistics (numeric)')
-        if kinds['num']:
-            st.dataframe(df[kinds['num']].describe().T.round(3), width='stretch', height=360)
+        panel('Suggested target columns')
+        if p['targets'].empty:
+            st.info('No obvious target column. Try the Clustering tab instead.')
         else:
-            st.info('No numeric columns.')
+            st.dataframe(p['targets'], hide_index=True, width='stretch', height=260,
+                         column_config={'Balance %': st.column_config.ProgressColumn('Class balance', min_value=0, max_value=100, format='%.0f%%',
+                                                                                     help='Smallest class size as % of the largest. Low = imbalanced.')})
+            st.markdown("<div class='note'>Ranked by name hints, position and how learnable the column looks. "
+                        "Pick one in the <b>Train &amp; compare</b> tab.</div>", unsafe_allow_html=True)
 
 
 def section_explore(df: pd.DataFrame, kinds: dict) -> None:
@@ -348,7 +499,7 @@ def section_explore(df: pd.DataFrame, kinds: dict) -> None:
         col = st.selectbox('Column', list(df.columns), key='lab_dist_col')
         if col in num:
             fig = px.histogram(view, x=col, nbins=40, marginal='box', color_discrete_sequence=[ACC])
-            fig.update_traces(marker_line_color='#0b1020', marker_line_width=1)
+            fig.update_traces(marker_line_color=BG, marker_line_width=1)
         else:
             vc = df[col].astype(str).value_counts().head(20)
             fig = go.Figure(go.Bar(x=vc.values, y=vc.index, orientation='h', marker=dict(color=vc.values, colorscale=SEQ),
@@ -410,7 +561,7 @@ def section_explore(df: pd.DataFrame, kinds: dict) -> None:
 
 def section_train(df: pd.DataFrame, kinds: dict, sig: str) -> None:
     cols = list(df.columns)
-    guess = next((c for c in cols if c.lower() in ('target', 'label', 'class', 'churn', 'y', 'outcome', 'price', 'species')), cols[-1])
+    guess = next((c for c in cols if c.lower() in TARGET_NAMES), cols[-1])
     t1, t2 = st.columns([1.4, 1])
     target = t1.selectbox('🎯 Target column (what to predict)', cols, index=cols.index(guess), key=f'lab_target_{sig}')
     auto = detect_task(df[target])
@@ -547,7 +698,7 @@ def render_results(res: dict) -> None:
         with c1, st.container(border=True):
             panel(f'Actual vs predicted · {pick}')
             lo, hi = float(min(yte.min(), pr.min())), float(max(yte.max(), pr.max()))
-            fig = go.Figure(go.Scatter(x=yte, y=pr, mode='markers', marker=dict(color=ACC2, size=7, opacity=.7, line=dict(width=.5, color='#0b1020'))))
+            fig = go.Figure(go.Scatter(x=yte, y=pr, mode='markers', marker=dict(color=ACC2, size=7, opacity=.7, line=dict(width=.5, color=BG))))
             fig.add_shape(type='line', x0=lo, y0=lo, x1=hi, y1=hi, line=dict(color=RED, dash='dash'))
             show(sty(fig, 380, xaxis_title='Actual', yaxis_title='Predicted', showlegend=False), 'lab_avp')
         with c2, st.container(border=True):
@@ -609,7 +760,7 @@ def section_cluster(df: pd.DataFrame, kinds: dict, sig: str) -> None:
         panel(f'Clusters in 2-D (PCA keeps {pca.explained_variance_ratio_.sum():.0%} of the variation)')
         fig = px.scatter(x=P[:, 0], y=P[:, 1], color=[f'Cluster {i}' for i in lab], color_discrete_sequence=PALETTE, opacity=.8,
                          category_orders={'color': [f'Cluster {i}' for i in range(k)]})
-        fig.update_traces(marker=dict(size=7, line=dict(width=.4, color='#0b1020')))
+        fig.update_traces(marker=dict(size=7, line=dict(width=.4, color=BG)))
         show(sty(fig, 430, xaxis_title='PC 1', yaxis_title='PC 2'), 'lab_pca')
     out = d.assign(cluster=lab)
     c1, c2 = st.columns([1, 1.6])
