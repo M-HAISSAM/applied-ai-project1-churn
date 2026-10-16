@@ -709,33 +709,37 @@ def _has_tabulate() -> bool:
 
 # ================================================================== page
 def render(root: str) -> None:
-    with st.sidebar:
-        st.markdown('## Data source')
-        src = st.radio('Where is the data?', ['Upload my file', 'Built-in demo dataset'], key='lab_src')
+    top = st.empty()  # the title bar goes above the data source box, but needs the data to fill its chips
+    with st.container(border=True):
+        panel('Data source')
+        s1, s2, s3 = st.columns([1, 2.2, 1.2])
+        src = s1.radio('Where is the data?', ['Upload my file', 'Built-in demo dataset'], key='lab_src')
         raw, name = None, ''
-        if src == 'Upload my file':
-            f = st.file_uploader('CSV, Excel or JSON', type=['csv', 'txt', 'xlsx', 'xls', 'json'], key='lab_file')
-            if f is not None:
-                try:
-                    raw, name = read_bytes(f.name, f.getvalue()), f.name
-                except Exception as exc:
-                    st.error(f'Could not read this file: {exc}')
-        else:
-            name = st.selectbox('Dataset', ['Telco churn sample (classification)', 'Iris flowers (classification, 3 classes)',
-                                            'Wine cultivars (classification, 3 classes)', 'Breast cancer (classification, 2 classes)',
-                                            'Diabetes progression (regression)'], key='lab_demo')
-            raw = demo_dataset(name, root)
-        if raw is not None:
-            st.markdown('## Cleaning')
+        with s2:
+            if src == 'Upload my file':
+                f = st.file_uploader('📤 Upload a dataset (CSV, Excel or JSON)', type=['csv', 'txt', 'xlsx', 'xls', 'json'], key='lab_file')
+                if f is not None:
+                    try:
+                        raw, name = read_bytes(f.name, f.getvalue()), f.name
+                    except Exception as exc:
+                        st.error(f'Could not read this file: {exc}')
+            else:
+                name = st.selectbox('Dataset', ['Telco churn sample (classification)', 'Iris flowers (classification, 3 classes)',
+                                                'Wine cultivars (classification, 3 classes)', 'Breast cancer (classification, 2 classes)',
+                                                'Diabetes progression (regression)'], key='lab_demo')
+                raw = demo_dataset(name, root)
+        with s3:
+            st.markdown('**Cleaning**')
             drop_dupes = st.checkbox('Remove duplicate rows', value=True, key='lab_dupes')
             drop_na = st.checkbox('Drop rows with any missing value', value=False, key='lab_dropna',
                                   help='Off: models fill gaps with the median or most common value instead.')
 
     chips = [('ALGORITHMS', str(len(zoo('classification'))), 'ok'), ('XGBOOST', 'ON' if xgb is not None else 'OFF', 'ok' if xgb is not None else 'bad')]
     if raw is None:
-        topbar('Dataset Lab', 'Upload · explore · train · compare', chips, '🧪')
+        with top:
+            topbar('Dataset Lab', 'Upload · explore · train · compare', chips, '🧪')
         st.markdown(
-            "<div class='insight'><p><b>Upload any table</b> in the sidebar (CSV, Excel or JSON) or pick a built-in demo dataset. The lab will:</p><ul>"
+            "<div class='insight'><p><b>Upload any table</b> in the box above (CSV, Excel or JSON) or pick a built-in demo dataset. The lab will:</p><ul>"
             "<li><b>Clean</b> it automatically: trims text, turns numbers stored as text into numbers, parses dates, drops empty and constant columns.</li>"
             "<li><b>Profile</b> every column and <b>explore</b> distributions, missing values, correlations and relationships.</li>"
             "<li><b>Train and compare</b> up to 8 algorithms (Logistic/Linear Regression, Decision Tree, Random Forest, Gradient Boosting, "
@@ -759,7 +763,8 @@ def render(root: str) -> None:
         return
     kinds = col_kinds(df)
     sig = sig_of(df)
-    topbar('Dataset Lab', name, chips + [('ROWS', f'{len(df):,}', ''), ('COLUMNS', str(df.shape[1]), ''),
+    with top:
+        topbar('Dataset Lab', name, chips + [('ROWS', f'{len(df):,}', ''), ('COLUMNS', str(df.shape[1]), ''),
                                          ('MISSING', f'{df.isna().mean().mean():.1%}', 'ok' if not df.isna().any().any() else 'bad')], '🧪')
     t = st.tabs(['📋 Overview', '🔍 Explore', '🤖 Train & compare', '🧩 Clustering', '📦 Predict & export'])
     with t[0]:
