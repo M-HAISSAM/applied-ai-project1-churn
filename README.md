@@ -169,3 +169,77 @@ The application allows a user to:
 **Owner:** Muhammad Haissam  
 **Version:** 1.0  
 **Date:** October 2026  
+
+
+# Week 5 — Neural Networks and Image Classification
+
+**Student:** Muhammad Haissam  
+**Course:** Applied AI  
+**University:** Quaid-i-Azam University, Islamabad  
+**Department:** Electronics  
+**Semester:** 2
+
+## Overview
+
+For this lab, I trained a model to classify landscape images into six categories. I used a pretrained ResNet18 model, first training its new classification layer and then fine-tuning its final block.
+
+## Dataset
+
+The project uses the [Intel Image Classification dataset on Kaggle](https://www.kaggle.com/datasets/puneet6060/intel-image-classification).
+
+The dataset contains six classes:
+
+- Buildings
+- Forest
+- Glacier
+- Mountain
+- Sea
+- Street
+
+| Class | Training images | Test images |
+|---|---:|---:|
+| Buildings | 2,191 | 437 |
+| Forest | 2,271 | 474 |
+| Glacier | 2,404 | 553 |
+| Mountain | 2,512 | 525 |
+| Sea | 2,274 | 510 |
+| Street | 2,382 | 501 |
+| **Total** | **14,034** | **3,000** |
+
+I split the training images into 11,929 training images and 2,105 validation images. The separate test set contains 3,000 images.
+
+## Approach
+
+I used ResNet18 with pretrained ImageNet weights. Images were resized to 224 × 224 pixels and normalized. During training, I also used random crops, horizontal flips, and small brightness and contrast changes.
+
+I trained the model in two stages:
+
+1. **Feature extraction:** I froze the pretrained layers and trained the new classification layer for three epochs. The best validation accuracy was **90.6%**.
+2. **Fine-tuning:** I unfroze ResNet18’s final block and trained it with the classification layer. The notebook contains two sequential three-epoch fine-tuning runs. The best validation accuracy from the later run was **93.9%**.
+
+## Test results
+
+The final model achieved **90.1% test accuracy** on the 3,000 test images.
+
+| Class | Precision | Recall | F1-score |
+|---|---:|---:|---:|
+| Buildings | 90.6% | 90.4% | 90.5% |
+| Forest | 98.1% | 99.2% | 98.6% |
+| Glacier | 88.5% | 77.6% | 82.7% |
+| Mountain | 80.8% | 86.7% | 83.6% |
+| Sea | 92.1% | 96.7% | 94.4% |
+| Street | 91.6% | 91.8% | 91.7% |
+
+Glacier was the hardest class for the model. The most frequent confusion was a glacier image classified as a mountain image, which happened 94 times. Some glacier and mountain scenes share similar visual features, which may have contributed to these errors.
+
+## Files
+
+- `week5-neural-networks.ipynb` — the notebook containing the data inspection, model training, learning curves, test evaluation, and error analysis.
+
+## How to run
+
+Open the notebook in Kaggle, attach the Intel Image Classification dataset, and select a GPU accelerator. Run the notebook cells in order.
+
+## Reflection
+
+Fine-tuning improved the model’s validation accuracy compared with training only the classification layer. The test results were strong overall, but the lower glacier recall shows that the model still has difficulty distinguishing some glacier scenes from mountains.
