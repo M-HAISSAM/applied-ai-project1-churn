@@ -243,3 +243,55 @@ Open the notebook in Kaggle, attach the Intel Image Classification dataset, and 
 ## Reflection
 
 Fine-tuning improved the model’s validation accuracy compared with training only the classification layer. The test results were strong overall, but the lower glacier recall shows that the model still has difficulty distinguishing some glacier scenes from mountains.
+## Week 6 — Pneumonia Classification from Chest X-rays
+
+### Overview
+
+I trained a ResNet18 model to classify chest X-ray images as NORMAL or PNEUMONIA. I trained the new classification head first, then fine-tuned the model’s final block.
+
+### Dataset and split
+
+- **Dataset:** [Chest X-Ray Images (Pneumonia) — Kaggle](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia)
+- **Classes:** NORMAL and PNEUMONIA
+- **Images indexed in this notebook:** 5,840
+- **Training folder:** 5,216 images, split into 4,354 training and 862 validation images by patient group
+- **Test set:** 624 images
+- **Imbalance:** PNEUMONIA was about 2.9 times more common than NORMAL in the training folder
+- **Duplicate audit:** 62 exact-duplicate file entries were flagged; 0 of 624 test images had a near-duplicate in the training set
+- **Group split:** 0 patient groups were shared between the training and validation sets
+
+The Kaggle listing reports a CC BY 4.0 license and describes the images as pediatric X-rays. The notebook’s image count is the number found in its train and test folders.
+
+### Method
+
+- Used ImageNet-pretrained ResNet18 with a new two-class output layer.
+- Converted images to grayscale with three channels and resized them to 224 × 224.
+- Used random resized crops, small rotations, and brightness/contrast changes during training.
+- Applied class-weighted loss to account for the class imbalance.
+- Selected the best model using validation macro-F1.
+
+### Results
+
+The best validation macro-F1 was **0.881** after training the classifier head and **0.945** after fine-tuning the final block.
+
+On the test set, the model achieved **0.925 accuracy** and **0.917 macro-F1**.
+
+| Class | Precision | Recall | F1-score |
+|---|---:|---:|---:|
+| NORMAL | 0.970 | 0.825 | 0.891 |
+| PNEUMONIA | 0.904 | 0.985 | 0.942 |
+
+A threshold of **0.362** was selected using the validation set to target recall of at least 0.95. On the test set, sensitivity was **0.990**, specificity was **0.808**, and AUC was **0.979**. At the test-set prevalence of 62.5%, PPV was **0.896**; at a 5% prevalence, estimated PPV was **0.213**.
+
+### Grad-CAM and limitations
+
+Most heatmaps highlighted areas around the chest, but some showed strong activation near image edges. I marked this as a possible shortcut risk, not proof of one. A follow-up check would mask image borders and markers, retrain, and compare results.
+
+This dataset is pediatric and does not represent every patient, hospital, or X-ray system. This project is for learning only; the model is not a medical diagnostic tool and should not be used to make treatment decisions.
+
+### Files
+
+- `week6-pneumonia-classification.ipynb` — data audit, training, evaluation, threshold analysis, and Grad-CAM.
+- `week6_model.pt` — saved model checkpoint in the Kaggle notebook output.
+
+
