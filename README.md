@@ -293,5 +293,14 @@ This dataset is pediatric and does not represent every patient, hospital, or X-r
 
 - `week6-pneumonia-classification.ipynb` — data audit, training, evaluation, threshold analysis, and Grad-CAM.
 - `week6_model.pt` — saved model checkpoint in the Kaggle notebook output.
+## Week 7: Text and Multimodal AI
 
+This notebook covers TF-IDF, SMS spam classification, named entity recognition, regular expressions, OCR error correction, and a combined image-and-text case record.
+
+- The hand-calculated TF-IDF example produced a cosine similarity of 0.544 between Documents 2 and 3.
+- The word n-gram SMS model achieved 98.64% accuracy and 0.9688 macro-F1. The character n-gram model achieved 99.22% accuracy and 0.9819 macro-F1 on the test split.
+- On the provided NER examples, F1 increased from 0.533 to 0.875 after adding entity rules. On five synthetic held-out examples, F1 increased from 0.821 to 0.900.
+- All eight regex validation cases passed.
+- The synthetic invoice OCR test had a character error rate of 0.000 before and after correction.
+- The multimodal case-record example combined a chest X-ray model score with masked fictional note text and flagged the case for human review. This is an educational demonstration, not a medical diagnosis.
 
